@@ -1,0 +1,130 @@
+name: 'SemVer Tagger'
+description: 'Tags the current commit generating a valid (and reasonable) Semantic Versioning 2.0 version based on Conventional Commits specification'
+inputs:
+  github_token:
+    description: 'GitHub token for pushing tags'
+    required: true
+  ignore_patterns:
+    description: 'Pipe-separated list of file patterns to ignore when calculating version bump'
+    required: false
+    default: '.md|.github/|.yml|.gitignore'
+runs:
+  using: "composite"
+  steps:
+    - name: Calculate and push new version tag
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        IGNORE_PATTERNS: ${{ inputs.ignore_patterns }}
+      run: |
+        # Enable case-insensitive matching
+        shopt -s nocasematch
+        
+        git fetch --tags
+        
+        # Debug information
+        echo "Listing all tags:"
+        git tag -l
+        
+        echo "Listing tags matching pattern:"
+        git tag -l "[0-9]*.[0-9]*.[0-9]*"
+        
+        # Get the latest semver tag, default to empty string if none exists
+        LATEST_TAG=$(git describe --tags --abbrev=0 --match "[0-9]*.[0-9]*.[0-9]*" 2>/dev/null || echo "")
+
+        # Get commit hashes since the latest tag (or all commits if no tag exists)
+        if [ -z "$LATEST_TAG" ]; then
+            COMMIT_HASHES=$(git log --reverse --format="%H")
+            LATEST_TAG="0.0.0"
+        else
+            COMMIT_HASHES=$(git log --reverse ${LATEST_TAG}..HEAD --format="%H")
+        fi
+
+        echo "Latest tag: $LATEST_TAG";
+        
+        # Skip if no commits found
+        if [ -z "$COMMIT_HASHES" ]; then
+            echo "No new commits found since $LATEST_TAG, skipping version bump"
+            exit 0
+        fi
+
+        # Parse current version
+        IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST_TAG"
+
+        # Default ignore patterns
+        IGNORE_PATTERNS="${IGNORE_PATTERNS}"
+
+        # Process each commit
+        while IFS= read -r commit_hash; do
+            # Get commit message
+            commit_message=$(git log -1 --format="%B" $commit_hash)
+            
+            # Get changed files for this commit
+            changed_files=$(git diff-tree --no-commit-id --name-only -r "$commit_hash")
+            echo "Analyzing commit: '$commit_hash' with message: '$commit_message' and updated files: '$changed_files'"
+            
+            # Check if commit touches only ignored files
+            all_files_ignored=true
+            while IFS= read -r file; do
+                if [[ ! "$file" =~ ($IGNORE_PATTERNS)$ ]]; then
+                    all_files_ignored=false
+                    break
+                fi
+            done <<< "$changed_files"
+            
+            # Skip version bump if all changed files are ignored
+            if [ "$all_files_ignored" = true ]; then
+                echo "All changed files are ignored, skipping version bump"
+                continue
+            fi
+                        
+            # Check for breaking changes
+            if [[ "$commit_message" =~ breaking ]]; then
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+            # Check for fixes
+            elif [[ "$commit_message" =~ ([^a-zA-Z0-9]|^)(fix|bugfix|bugfixing|fixed|fixes|fixing|fixup)([^a-zA-Z0-9]|$) ]]; then
+                PATCH=$((PATCH + 1))
+            # All other changes are considered minor
+            else
+                MINOR=$((MINOR + 1))
+                PATCH=0
+            fi
+            
+            echo "Bumping version to: $MAJOR.$MINOR.$PATCH"
+        done <<< "$COMMIT_HASHES"
+
+        # Create new tag
+        NEW_TAG="${MAJOR}.${MINOR}.${PATCH}"
+
+        # Create and push new tag if it's different from the latest
+        if [ "$NEW_TAG" != "$LATEST_TAG" ]; then
+            echo "New version: $NEW_TAG (previous was $LATEST_TAG)"
+
+            # Create tag
+            git tag $NEW_TAG
+
+            # Debug info
+            if [ -n "$GITHUB_ACTOR" -a -n "$GITHUB_REPOSITORY" ]; then
+                echo "Repository: $GITHUB_REPOSITORY"
+                echo "Actor: $GITHUB_ACTOR"
+            
+                # Configure git
+                git config --global user.name "$GITHUB_ACTOR"
+                git config --global user.email "$GITHUB_ACTOR@users.noreply.github.com"
+        
+                # Set up authentication and push
+                echo "remote set-url origin ..."
+                git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+                echo "git push origin $NEW_TAG"
+                git push origin $NEW_TAG || {
+                    echo "::error::Failed to push new tag. Please check if the provided token has sufficient permissions."
+                    exit 1
+                }
+            fi
+        fi
+
+branding:
+  icon: git-merge
+  color: green
