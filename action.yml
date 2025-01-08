@@ -67,7 +67,7 @@ runs:
             if [ -z "$changed_files" ]; then
                 echo "No files changed in this commit, skipping version bump"
                 continue
-            }
+            fi
             
             # Check if commit touches only ignored files
             all_files_ignored=true
