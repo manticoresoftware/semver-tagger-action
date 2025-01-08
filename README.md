@@ -1,10 +1,24 @@
-## SemVer Tagger GitHub action
+## SemVer Tagger GitHub Action
 
-This GitHub action analyzes commit messages since the last version tag and:
+This GitHub action automatically creates and pushes version tags based on your commit messages, following semantic versioning (SemVer) principles.
 
-- Bumps **major** version (X.0.0) when commits contain "breaking" changes
-- Bumps **minor** version (0.X.0) for new features and non-breaking changes
-- Bumps **patch** version (0.0.X) for commits containing "fix", "bugfix", etc.
+### What it does:
+
+1. Scans all commits since the last version tag
+2. Analyzes commit messages to determine the type of changes
+3. Automatically calculates the next version number based on:
+   - **MAJOR** version (X.0.0) - when commits contain "breaking" changes
+   - **MINOR** version (0.X.0) - for new features and non-breaking changes
+   - **PATCH** version (0.0.X) - for bug fixes (commits with "fix", "bugfix", etc.)
+4. Creates and pushes a new Git tag with the calculated version
+
+For example:
+- If current version is `v1.2.3` and you commit with "breaking: new API"
+  → Action creates tag `v2.0.0`
+- If current version is `v1.2.3` and you commit with "feat: new login"
+  → Action creates tag `v1.3.0`
+- If current version is `v1.2.3` and you commit with "fix: login bug"
+  → Action creates tag `v1.2.4`
 
 ## Usage
 
