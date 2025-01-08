@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Required to fetch all tags
-      - uses: sanikolaev/semver-tagger-action@v1
+      - uses: manticoresoftware/semver-tagger-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -48,14 +48,14 @@ You can customize this list using the `ignore_patterns` input parameter. Pattern
 
 Basic usage:
 ```yaml
-- uses: sanikolaev/semver-tagger-action@v1
+- uses: manticoresoftware/semver-tagger-action@v1
   with:
     github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 Custom ignore patterns:
 ```yaml
-- uses: sanikolaev/semver-tagger-action@v1
+- uses: manticoresoftware/semver-tagger-action@v1
   with:
     github_token: ${{ secrets.GITHUB_TOKEN }}
     ignore_patterns: '.md|.txt|.docs/|package-lock.json'
