@@ -8,6 +8,11 @@ inputs:
     description: 'Pipe-separated list of file patterns to ignore when calculating version bump'
     required: false
     default: '.md|.github/|.yml|.gitignore'
+
+outputs:
+  version:
+    description: 'The new version tag created by the action'
+
 runs:
   using: "composite"
   steps:
@@ -124,6 +129,7 @@ runs:
                 echo "remote set-url origin ..."
                 git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
                 echo "git push origin $NEW_TAG"
+                echo "version=$NEW_TAG" >> $GITHUB_OUTPUT
                 git push origin $NEW_TAG || {
                     echo "::error::Failed to push new tag. Please check if the provided token has sufficient permissions."
                     exit 1
