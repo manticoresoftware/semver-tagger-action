@@ -63,6 +63,12 @@ runs:
             changed_files=$(git diff-tree --no-commit-id --name-only -r "$commit_hash")
             echo "Analyzing commit: '$commit_hash' with message: '$commit_message' and updated files: '$changed_files'"
             
+            # Skip if no files were changed (e.g. merge commits)
+            if [ -z "$changed_files" ]; then
+                echo "No files changed in this commit, skipping version bump"
+                continue
+            }
+            
             # Check if commit touches only ignored files
             all_files_ignored=true
             while IFS= read -r file; do
