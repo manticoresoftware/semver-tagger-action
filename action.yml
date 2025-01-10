@@ -19,6 +19,9 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
     - name: Calculate and push new version tag
       id: calculate-version
       shell: bash
