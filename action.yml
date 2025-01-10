@@ -8,7 +8,6 @@ inputs:
     description: 'Pipe-separated list of file patterns to ignore when calculating version bump'
     required: false
     default: '.md|.github/|.yml|.gitignore'
-
 outputs:
   version:
     description: 'The new version tag created by the action'
