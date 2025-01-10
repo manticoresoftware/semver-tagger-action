@@ -36,7 +36,7 @@ jobs:
       contents: write  # Required for pushing tags
     steps:
       - id: semver-tagger
-        uses: manticoresoftware/semver-tagger-action@v1
+        uses: manticoresoftware/semver-tagger-action@v2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
