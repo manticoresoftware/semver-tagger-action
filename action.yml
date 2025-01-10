@@ -15,6 +15,9 @@ outputs:
   version_full:
     description: 'Full version string including branch and commit information'
     value: ${{ steps.calculate-version.outputs.version_full }}
+  target:
+    description: 'Build target - release or dev depending on presence of release tag'
+    value: ${{ steps.calculate-version.outputs.target }}
 
 runs:
   using: "composite"
@@ -56,6 +59,13 @@ runs:
 
         # Check if current commit has a release tag
         HAS_RELEASE_TAG=$(git tag --points-at HEAD | grep -E '^release$' || true)
+        
+        # Set target based on release tag presence
+        if [ -n "$HAS_RELEASE_TAG" ]; then
+            echo "target=release" >> $GITHUB_OUTPUT
+        else
+            echo "target=dev" >> $GITHUB_OUTPUT
+        fi
 
         # Skip if no commits found
         if [ -z "$COMMIT_HASHES" ]; then

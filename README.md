@@ -32,6 +32,7 @@ jobs:
     outputs:
       version: ${{ steps.semver-tagger.outputs.version }}
       version_full: ${{ steps.semver-tagger.outputs.version_full }}
+      target: ${{ steps.semver-tagger.outputs.target }}
     permissions:
       contents: write  # Required for pushing tags
     steps:
@@ -49,13 +50,15 @@ jobs:
       - run: |
           echo "New version: ${{ needs.update-version.outputs.version }}"
           echo "Full version: ${{ needs.update-version.outputs.version_full }}"
+          echo "Build target: ${{ needs.update-version.outputs.target }}"
 ```
 
 ### Important Notes
 - The action requires `contents: write` permission to create and push tags
-- The action outputs two version formats:
+- The action outputs two version formats and one target:
   - `version`: Simple semver format (e.g., "1.2.3")
   - `version_full`: Extended format with metadata (e.g., "1.2.3+230415-a1b2c3d4[-dev|-<branch name>")
+  - `target`: Build target - "release" when commit has release tag, "dev" otherwise
 - The full version format includes:
   - Base version
   - Commit timestamp (YYMMDDHHH)
@@ -87,6 +90,7 @@ You can customize this list using the `ignore_patterns` input parameter.
 |--------|-------------|---------|
 | `version` | Simple semver version | `1.2.3` |
 | `version_full` | Full version with metadata | `1.2.3+23041507-a1b2c3d4-dev` |
+| `target` | Build target | `release` or `dev` |
 
 ## License
 
