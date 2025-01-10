@@ -11,13 +11,16 @@ inputs:
 outputs:
   version:
     description: 'The new version tag created by the action'
+    value: ${{ steps.calculate-version.outputs.version }}
   version_full:
     description: 'Full version string including branch and commit information'
+    value: ${{ steps.calculate-version.outputs.version_full }}
 
 runs:
   using: "composite"
   steps:
     - name: Calculate and push new version tag
+      id: calculate-version
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
