@@ -12,6 +12,8 @@ inputs:
 outputs:
   version:
     description: 'The new version tag created by the action'
+  version_full:
+    description: 'Full version string including branch and commit information'
 
 runs:
   using: "composite"
@@ -29,10 +31,10 @@ runs:
         
         # Debug information
         echo "Listing all tags:"
-        git tag -l
+        echo $(git tag -l)
         
         echo "Listing tags matching pattern:"
-        git tag -l "[0-9]*.[0-9]*.[0-9]*"
+        echo $(git tag -l "[0-9]*.[0-9]*.[0-9]*")
         
         # Get the latest semver tag, default to empty string if none exists
         LATEST_TAG=$(git describe --tags --abbrev=0 --match "[0-9]*.[0-9]*.[0-9]*" 2>/dev/null || echo "")
@@ -46,10 +48,28 @@ runs:
         fi
 
         echo "Latest tag: $LATEST_TAG";
-        
+
+        # Check if current commit has a release tag
+        HAS_RELEASE_TAG=$(git tag --points-at HEAD | grep -E '^release$' || true)
+
         # Skip if no commits found
         if [ -z "$COMMIT_HASHES" ]; then
             echo "No new commits found since $LATEST_TAG, skipping version bump"
+            
+            if [ -n "$HAS_RELEASE_TAG" ]; then
+                # Get current commit hash (first 8 chars)
+                COMMIT_HASH=$(git rev-parse --short=8 HEAD)
+                
+                # Get timestamp from the commit
+                TIMESTAMP=$(git log -1 --format="%cd" --date=format:'%y%m%d%H' HEAD)
+                
+                # Output version info for release tag
+                VERSION_FULL="${LATEST_TAG}+${TIMESTAMP}-${COMMIT_HASH}"
+                echo "RESULT: version=$LATEST_TAG; version_full=$VERSION_FULL"
+                echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
+                echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
+            fi
+            
             exit 0
         fi
 
@@ -108,10 +128,31 @@ runs:
 
         # Create new tag
         NEW_TAG="${MAJOR}.${MINOR}.${PATCH}"
+        
+        # Get current branch name
+        BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+        
+        # Get current commit hash (first 8 chars)
+        COMMIT_HASH=$(git rev-parse --short=8 HEAD)
+        
+        # Get timestamp from the commit in YYMMDDHH format
+        TIMESTAMP=$(git log -1 --format="%cd" --date=format:'%y%m%d%H' HEAD)
+              
+        # Generate full version string
+        if [ -z "$HAS_RELEASE_TAG" ]; then
+            if [[ "$BRANCH_NAME" == "master" || "$BRANCH_NAME" == "main" ]]; then
+                VERSION_FULL="${NEW_TAG}+${TIMESTAMP}-${COMMIT_HASH}-dev"
+            else
+                VERSION_FULL="${NEW_TAG}+${TIMESTAMP}-${COMMIT_HASH}-${BRANCH_NAME}"
+            fi
+        else
+            VERSION_FULL="${NEW_TAG}+${TIMESTAMP}-${COMMIT_HASH}"
+        fi
 
         # Create and push new tag if it's different from the latest
         if [ "$NEW_TAG" != "$LATEST_TAG" ]; then
             echo "New version: $NEW_TAG (previous was $LATEST_TAG)"
+            echo "Full version: $VERSION_FULL"
 
             # Create tag
             git tag $NEW_TAG
@@ -129,12 +170,19 @@ runs:
                 echo "remote set-url origin ..."
                 git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
                 echo "git push origin $NEW_TAG"
+                echo "RESULT: version=$NEW_TAG; version_full=$VERSION_FULL"
                 echo "version=$NEW_TAG" >> $GITHUB_OUTPUT
+                echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
                 git push origin $NEW_TAG || {
                     echo "::error::Failed to push new tag. Please check if the provided token has sufficient permissions."
                     exit 1
                 }
             fi
+        elif [ -n "$HAS_RELEASE_TAG" ]; then
+            # Output version info even if tag hasn't changed, when release tag is present
+            echo "RESULT: version=$NEW_TAG; version_full=$VERSION_FULL"
+            echo "version=$NEW_TAG" >> $GITHUB_OUTPUT
+            echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
         fi
 
 branding:
