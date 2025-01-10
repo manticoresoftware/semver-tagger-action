@@ -170,13 +170,13 @@ runs:
                 echo "remote set-url origin ..."
                 git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
                 echo "git push origin $NEW_TAG"
-                echo "RESULT: version=$NEW_TAG; version_full=$VERSION_FULL"
-                echo "version=$NEW_TAG" >> $GITHUB_OUTPUT
-                echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
                 git push origin $NEW_TAG || {
                     echo "::error::Failed to push new tag. Please check if the provided token has sufficient permissions."
                     exit 1
                 }
+                echo "RESULT: version=$NEW_TAG; version_full=$VERSION_FULL"
+                echo "version=$NEW_TAG" >> $GITHUB_OUTPUT
+                echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
             fi
         elif [ -n "$HAS_RELEASE_TAG" ]; then
             # Output version info even if tag hasn't changed, when release tag is present
