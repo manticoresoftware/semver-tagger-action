@@ -146,7 +146,8 @@ runs:
         
         # Get current branch name
         BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
-        
+        # Semver does not allow some symbols that branch may have
+        VERSION_SUFFIX=$(echo "$BRANCH_NAME" | sed 's/[^a-zA-Z0-9-]//g')
         # Get current commit hash (first 8 chars)
         COMMIT_HASH=$(git rev-parse --short=8 HEAD)
         
@@ -158,7 +159,7 @@ runs:
             if [[ "$BRANCH_NAME" == "master" || "$BRANCH_NAME" == "main" ]]; then
                 VERSION_FULL="${NEW_TAG}+${TIMESTAMP}-${COMMIT_HASH}-dev"
             else
-                VERSION_FULL="${NEW_TAG}+${TIMESTAMP}-${COMMIT_HASH}-${BRANCH_NAME}"
+                VERSION_FULL="${NEW_TAG}+${TIMESTAMP}-${COMMIT_HASH}-${VERSION_SUFFIX}"
             fi
         else
             VERSION_FULL="${NEW_TAG}+${TIMESTAMP}-${COMMIT_HASH}"
