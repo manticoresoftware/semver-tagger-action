@@ -15,6 +15,12 @@ outputs:
   version_full:
     description: 'Full version string including branch and commit information'
     value: ${{ steps.calculate-version.outputs.version_full }}
+  version_rpm:
+    description: 'Full version string including branch and commit information for RPM'
+    value: ${{ steps.calculate-version.outputs.version_rpm }}
+  version_deb:
+    description: 'Full version string including branch and commit information for DEB'
+    value: ${{ steps.calculate-version.outputs.version_deb }}
   target:
     description: 'Build target - release or dev depending on presence of release tag'
     value: ${{ steps.calculate-version.outputs.target }}
@@ -41,11 +47,17 @@ runs:
         echo "Listing all tags:"
         echo $(git tag -l)
         
+        # Get all tags that match the pattern
+        MATCHING_TAGS=$(git tag -l "[0-9]*.[0-9]*.[0-9]*")
         echo "Listing tags matching pattern:"
-        echo $(git tag -l "[0-9]*.[0-9]*.[0-9]*")
-        
-        # Get the latest semver tag, default to empty string if none exists
-        LATEST_TAG=$(git describe --tags --abbrev=0 --match "[0-9]*.[0-9]*.[0-9]*" 2>/dev/null || echo "")
+        echo "$MATCHING_TAGS"
+
+        # Check if there are any matching tags
+        if [ -n "$MATCHING_TAGS" ]; then
+          # Get the latest semver tag
+          LATEST_TAG=$(echo "$MATCHING_TAGS" | sort -V | tail -1)
+        fi
+        echo "Latest tag: $LATEST_TAG"
 
         # Get commit hashes since the latest tag (or all commits if no tag exists)
         if [ -z "$LATEST_TAG" ]; then
@@ -165,10 +177,15 @@ runs:
             VERSION_FULL="${NEW_TAG}+${TIMESTAMP}-${COMMIT_HASH}"
         fi
 
+        VERSION_RPM=$(echo "$VERSION_FULL" | tr '-' '.')
+        VERSION_DEB=$(echo "$VERSION_FULL")
+
         # Create and push new tag if it's different from the latest
         if [ "$NEW_TAG" != "$LATEST_TAG" ]; then
             echo "New version: $NEW_TAG (previous was $LATEST_TAG)"
             echo "Full version: $VERSION_FULL"
+            echo "RPM version: $VERSION_RPM"
+            echo "DEB version: $VERSION_DEB"
 
             # Create tag
             git tag $NEW_TAG
@@ -193,12 +210,16 @@ runs:
                 echo "RESULT: version=$NEW_TAG; version_full=$VERSION_FULL"
                 echo "version=$NEW_TAG" >> $GITHUB_OUTPUT
                 echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
+                echo "version_rpm=$VERSION_RPM" >> $GITHUB_OUTPUT
+                echo "version_deb=$VERSION_DEB" >> $GITHUB_OUTPUT
             fi
         elif [ -n "$HAS_RELEASE_TAG" ]; then
             # Output version info even if tag hasn't changed, when release tag is present
             echo "RESULT: version=$NEW_TAG; version_full=$VERSION_FULL"
             echo "version=$NEW_TAG" >> $GITHUB_OUTPUT
             echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
+            echo "version_rpm=$VERSION_RPM" >> $GITHUB_OUTPUT
+            echo "version_deb=$VERSION_DEB" >> $GITHUB_OUTPUT
         fi
 
 branding:
