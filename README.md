@@ -1,6 +1,6 @@
 ## SemVer Tagger GitHub Action
 
-This GitHub action automatically creates and pushes version tags based on your commit messages, following semantic versioning (SemVer) principles.
+This GitHub action automatically creates and pushes version tags based on your commit messages, following semantic versioning ([SemVer](https://semver.org/)) principles.
 
 ### What it does:
 
