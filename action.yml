@@ -95,13 +95,12 @@ runs:
                 
                 # Output version info for release tag
                 VERSION_FULL="${LATEST_TAG}+${TIMESTAMP}-${COMMIT_HASH}"
-                echo "RESULT: version=$LATEST_TAG; version_full=$VERSION_FULL"
                 echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
                 echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
                 echo "version_rpm=$(echo "$VERSION_FULL" | tr '-' '.')" >> $GITHUB_OUTPUT
                 echo "version_deb=$VERSION_FULL" >> $GITHUB_OUTPUT
             fi
-            echo "GITHUB_OUTPUT: "; cat $GITHUB_OUTPUT
+            echo "RESULT: "; cat $GITHUB_OUTPUT
             exit 0
         fi
 
@@ -212,7 +211,6 @@ runs:
                     echo "::error::Failed to push new tag. Please check if the provided token has sufficient permissions."
                     exit 1
                 }
-                echo "RESULT: version=$NEW_TAG; version_full=$VERSION_FULL"
                 echo "version=$NEW_TAG" >> $GITHUB_OUTPUT
                 echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
                 echo "version_rpm=$VERSION_RPM" >> $GITHUB_OUTPUT
@@ -220,13 +218,12 @@ runs:
             fi
         elif [ -n "$HAS_RELEASE_TAG" ]; then
             # Output version info even if tag hasn't changed, when release tag is present
-            echo "RESULT: version=$NEW_TAG; version_full=$VERSION_FULL"
             echo "version=$NEW_TAG" >> $GITHUB_OUTPUT
             echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
             echo "version_rpm=$VERSION_RPM" >> $GITHUB_OUTPUT
             echo "version_deb=$VERSION_DEB" >> $GITHUB_OUTPUT
         fi
-        echo "GITHUB_OUTPUT: "; cat $GITHUB_OUTPUT
+        echo "RESULT: "; cat $GITHUB_OUTPUT
 
 branding:
   icon: git-merge
