@@ -101,7 +101,7 @@ runs:
                 echo "version_rpm=$(echo "$VERSION_FULL" | tr '-' '.')" >> $GITHUB_OUTPUT
                 echo "version_deb=$VERSION_FULL" >> $GITHUB_OUTPUT
             fi
-            
+            echo "GITHUB_OUTPUT: $GITHUB_OUTPUT"        
             exit 0
         fi
 
