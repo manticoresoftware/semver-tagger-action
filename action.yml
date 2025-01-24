@@ -73,7 +73,7 @@ runs:
         echo "Latest tag: $LATEST_TAG";
 
         # Check if current commit has a release tag
-        HAS_RELEASE_TAG=$(git tag --points-at HEAD | grep -E '^release$' || true)
+        HAS_RELEASE_TAG=$(git tag --points-at HEAD | grep -E '^release' || true)
         
         # Set target based on release tag presence
         if [ -n "$HAS_RELEASE_TAG" ]; then
