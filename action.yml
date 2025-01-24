@@ -224,6 +224,7 @@ runs:
             echo "version_rpm=$VERSION_RPM" >> $GITHUB_OUTPUT
             echo "version_deb=$VERSION_DEB" >> $GITHUB_OUTPUT
         fi
+        echo "GITHUB_OUTPUT: $GITHUB_OUTPUT"
 
 branding:
   icon: git-merge
