@@ -98,6 +98,8 @@ runs:
                 echo "RESULT: version=$LATEST_TAG; version_full=$VERSION_FULL"
                 echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
                 echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
+                echo "version_rpm=$(echo "$VERSION_FULL" | tr '-' '.')" >> $GITHUB_OUTPUT
+                echo "version_deb=$VERSION_FULL" >> $GITHUB_OUTPUT
             fi
             
             exit 0
