@@ -84,7 +84,7 @@ runs:
             echo "target=dev" >> $GITHUB_OUTPUT
         fi
 
-        echo "DEBUG: Target: $TARGET";
+        echo "DEBUG: after setting target";
 
         # Skip if no commits found
         if [ -z "$COMMIT_HASHES" ]; then
@@ -111,9 +111,12 @@ runs:
         # Parse current version
         IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST_TAG"
 
+        echo "DEBUG: MAJOR: $MAJOR, MINOR: $MINOR, PATCH: $PATCH";
+
         # Default ignore patterns
         IGNORE_PATTERNS="${IGNORE_PATTERNS}"
-
+        echo "DEBUG: IGNORE_PATTERNS: $IGNORE_PATTERNS";
+        
         # Process each commit
         while IFS= read -r commit_hash; do
             # Get commit message
