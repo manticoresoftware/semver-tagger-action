@@ -121,6 +121,7 @@ runs:
         while IFS= read -r commit_hash; do
             # Get commit message
             commit_message=$(git log -1 --format="%B" $commit_hash)
+            echo "DEBUG: commit_message: $commit_message";
             
             # Get changed files for this commit
             changed_files=$(git diff-tree --no-commit-id --name-only -r "$commit_hash")
