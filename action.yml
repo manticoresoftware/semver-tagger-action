@@ -140,18 +140,39 @@ runs:
                 continue
             fi
                         
-            # Check for breaking changes
-            if [[ "$commit_message" =~ breaking ]]; then
+            # Skip commits with specific prefixes
+            if [[ "$commit_message" =~ ^(ci|chore|docs|test|build|style)(\([^)]+\))?: ]]; then
+                continue
+            # Check for breaking changes or specific prefixes indicating major changes
+            elif [[ "$commit_message" =~ ^(bug|feat|chore|ci)(\([^)]+\))?!: || "$commit_message" =~ breaking ]]; then
                 MAJOR=$((MAJOR + 1))
                 MINOR=0
                 PATCH=0
             # Check for fixes
             elif [[ "$commit_message" =~ ([^a-zA-Z0-9]|^)(fix|bugfix|bugfixing|fixed|fixes|fixing|fixup)([^a-zA-Z0-9]|$) ]]; then
                 PATCH=$((PATCH + 1))
-            # All other changes are considered minor
+            # Attempt to determine change type from issue or pull request
             else
-                MINOR=$((MINOR + 1))
-                PATCH=0
+                # Extract URL or issue number
+                if [[ "$commit_message" =~ (https://github\.com/[^ ]+|#[0-9]+) ]]; then
+                    url_or_issue="${BASH_REMATCH[1]}"
+                    # Fetch issue or PR details using GitHub API
+                    # (Assuming you have a function or command to fetch details)
+                    details=$(fetch_github_details "$url_or_issue")
+                    type=$(echo "$details" | jq -r '.type')
+                    label=$(echo "$details" | jq -r '.label')
+
+                    if [[ "$type" == "feature" ]]; then
+                        MINOR=$((MINOR + 1))
+                        PATCH=0
+                    elif [[ "$type" == "bug" || "$label" == "bug" ]]; then
+                        PATCH=$((PATCH + 1))
+                    fi
+                else
+                    # Default to minor increment if no specific type is found
+                    MINOR=$((MINOR + 1))
+                    PATCH=0
+                fi
             fi
             
             echo "Bumping version to: $MAJOR.$MINOR.$PATCH"
