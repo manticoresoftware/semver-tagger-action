@@ -41,7 +41,6 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         IGNORE_PATTERNS: ${{ inputs.ignore_patterns }}
       run: |
-        set -x
         # Enable case-insensitive matching
         shopt -s nocasematch
         
