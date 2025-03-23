@@ -75,7 +75,7 @@ runs:
         # Check if current commit has a release tag
         HAS_RELEASE_TAG=$(git tag --points-at HEAD | grep -E '^release' || true)
 
-        echo "Has release tag: $HAS_RELEASE_TAG";
+        echo "DEBUG: Has release tag: $HAS_RELEASE_TAG";
         
         # Set target based on release tag presence
         if [ -n "$HAS_RELEASE_TAG" ]; then
@@ -83,6 +83,8 @@ runs:
         else
             echo "target=dev" >> $GITHUB_OUTPUT
         fi
+
+        echo "DEBUG: Target: $TARGET";
 
         # Skip if no commits found
         if [ -z "$COMMIT_HASHES" ]; then
