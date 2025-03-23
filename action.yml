@@ -116,6 +116,7 @@ runs:
         # Default ignore patterns
         IGNORE_PATTERNS="${IGNORE_PATTERNS}"
         echo "DEBUG: IGNORE_PATTERNS: $IGNORE_PATTERNS";
+        echo "DEBUG: COMMIT_HASHES: $COMMIT_HASHES";
         
         # Process each commit
         while IFS= read -r commit_hash; do
