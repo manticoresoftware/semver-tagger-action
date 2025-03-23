@@ -213,7 +213,7 @@ runs:
             echo "DEB version: $VERSION_DEB"
 
             # Create tag
-            git tag $NEW_TAG
+            #git tag $NEW_TAG
 
             # Debug info
             if [ -n "$GITHUB_ACTOR" -a -n "$GITHUB_REPOSITORY" ]; then
