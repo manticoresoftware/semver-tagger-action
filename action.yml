@@ -70,10 +70,12 @@ runs:
             COMMIT_HASHES=$(git log --reverse ${LATEST_TAG}..HEAD --format="%H")
         fi
 
-        echo "Latest tag: $LATEST_TAG";
+        echo "Latest tag (updated): $LATEST_TAG";
 
         # Check if current commit has a release tag
         HAS_RELEASE_TAG=$(git tag --points-at HEAD | grep -E '^release' || true)
+
+        echo "Has release tag: $HAS_RELEASE_TAG";
         
         # Set target based on release tag presence
         if [ -n "$HAS_RELEASE_TAG" ]; then
