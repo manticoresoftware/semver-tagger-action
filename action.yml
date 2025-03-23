@@ -121,6 +121,7 @@ runs:
         # Process each commit
         while IFS= read -r commit_hash; do
             # Get commit message
+            echo "DEBUG: here"
             commit_message=$(git log -1 --format="%B" $commit_hash)
             echo "DEBUG: commit_message: $commit_message";
             
