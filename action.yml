@@ -152,15 +152,24 @@ runs:
             fi
                         
             # Skip commits with specific prefixes
-            if [[ "$commit_message" =~ ^(ci|chore|docs|test|build|style)(\([^)]+\))?: ]]; then
-                continue
+            SKIP_PREFIX_PATTERN="^(ci|chore|docs|test|build|style)"
+            if [[ "$commit_message" =~ $SKIP_PREFIX_PATTERN ]]; then
+                # Check if there's a colon somewhere (with or without scope)
+                if [[ "$commit_message" =~ : ]]; then
+                    continue
+                fi
+            fi
+            
             # Check for breaking changes or specific prefixes indicating major changes
-            elif [[ "$commit_message" =~ ^(bug|feat|chore|ci)(\([^)]+\))?!: || "$commit_message" =~ breaking ]]; then
+            MAJOR_PREFIX_PATTERN="^(bug|feat|chore|ci)"
+            if [[ ("$commit_message" =~ $MAJOR_PREFIX_PATTERN && "$commit_message" =~ !) || "$commit_message" =~ breaking ]]; then
                 MAJOR=$((MAJOR + 1))
                 MINOR=0
                 PATCH=0
             # Check for fixes
-            elif [[ "$commit_message" =~ ([^a-zA-Z0-9]|^)(fix|bugfix|bugfixing|fixed|fixes|fixing|fixup)([^a-zA-Z0-9]|$) ]]; then
+            elif [[ "$commit_message" =~ fix || "$commit_message" =~ bugfix || "$commit_message" =~ bugfixing || 
+                  "$commit_message" =~ fixed || "$commit_message" =~ fixes || "$commit_message" =~ fixing || 
+                  "$commit_message" =~ fixup ]]; then
                 PATCH=$((PATCH + 1))
             # Attempt to determine change type from issue or pull request
             else
