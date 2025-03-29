@@ -70,6 +70,7 @@ runs:
 
             # Fetch details using GitHub API
             response=$(curl -s -H "Authorization: token $token" "$api_url")
+            echo $response >&2
 
             # Check for errors
             if [[ $(echo "$response" | jq -r '.message // empty') == "Not Found" ]]; then
@@ -78,25 +79,47 @@ runs:
             fi
 
             # Extract type and label from the response
-            type="unknown"
+            issue_type="unknown"
             if [[ $(echo "$response" | jq -r '.pull_request // empty') != "" ]]; then
-                type="pull_request"
+                issue_type="pull_request"
             elif [[ $(echo "$response" | jq -r '.url // empty') == *"/issues/"* ]]; then
-                type="issue"
+                issue_type="issue"
             fi
 
             # Look for specific labels or types
             labels=$(echo "$response" | jq -r '.labels[]?.name' 2>/dev/null || echo "")
             label=""
             
+            # Check for bug/feature in labels
             if [[ "$labels" == *"bug"* ]]; then
+                echo "Found 'bug' in labels" >&2
                 label="bug"
             elif [[ "$labels" == *"feature"* ]]; then
+                echo "Found 'feature' in labels" >&2
                 label="feature"
             fi
 
+            # If no label found, check if type field exists and extract its name
+            if [[ -z "$label" ]]; then
+                type_field=$(echo "$response" | jq -r '.type.name // empty' 2>/dev/null)
+                echo "Type field: '$type_field'" >&2
+
+                if [[ -n "$type_field" ]]; then
+                    # Case-insensitive match for Bug/Feature
+                    if [[ "$type_field" =~ [Bb][Uu][Gg] ]]; then
+                        echo "Found 'Bug' in type field" >&2
+                        label="bug"
+                    elif [[ "$type_field" =~ [Ff][Ee][Aa][Tt][Uu][Rr][Ee] ]]; then
+                        echo "Found 'Feature' in type field" >&2
+                        label="feature"
+                    fi
+                fi
+            fi
+
             # Return type and label as a JSON object
-            echo "{\"type\": \"$type\", \"label\": \"$label\"}"
+            result="{\"type\": \"$issue_type\", \"label\": \"$label\"}"
+            echo "Returning result: $result" >&2
+            echo "$result"
         }
         
         git fetch --tags
@@ -134,9 +157,9 @@ runs:
         
         # Set target based on release tag presence
         if [ -n "$HAS_RELEASE_TAG" ]; then
-            echo "target=release" >> $GITHUB_OUTPUT
+            echo "target=release" >> "$GITHUB_OUTPUT"
         else
-            echo "target=dev" >> $GITHUB_OUTPUT
+            echo "target=dev" >> "$GITHUB_OUTPUT"
         fi
 
         echo "DEBUG: after setting target";
@@ -154,12 +177,12 @@ runs:
                 
                 # Output version info for release tag
                 VERSION_FULL="${LATEST_TAG}+${TIMESTAMP}-${COMMIT_HASH}"
-                echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
-                echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
-                echo "version_rpm=$(echo "$VERSION_FULL" | tr '-' '.')" >> $GITHUB_OUTPUT
-                echo "version_deb=$VERSION_FULL" >> $GITHUB_OUTPUT
+                echo "version=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+                echo "version_full=$VERSION_FULL" >> "$GITHUB_OUTPUT"
+                echo "version_rpm=$(echo "$VERSION_FULL" | tr '-' '.')" >> "$GITHUB_OUTPUT"
+                echo "version_deb=$VERSION_FULL" >> "$GITHUB_OUTPUT"
             fi
-            echo "RESULT: "; cat $GITHUB_OUTPUT
+            echo "RESULT: "; cat "$GITHUB_OUTPUT"
             exit 0
         fi
 
@@ -176,7 +199,7 @@ runs:
         # Process each commit
         while IFS= read -r commit_hash; do
             # Get commit message
-            echo "DEBUG: here"
+
             commit_message=$(git log -1 --format="%B" $commit_hash)
             echo "DEBUG: commit_message: $commit_message";
             
@@ -192,12 +215,17 @@ runs:
             
             # Check if commit touches only ignored files
             all_files_ignored=true
-            while IFS= read -r file; do
-                if [[ ! "$file" =~ ($IGNORE_PATTERNS)$ ]]; then
-                    all_files_ignored=false
-                    break
-                fi
-            done <<< "$changed_files"
+            if [ -z "$IGNORE_PATTERNS" ]; then
+                # If IGNORE_PATTERNS is empty, don't ignore any files
+                all_files_ignored=false
+            else
+                while IFS= read -r file; do
+                    if [[ ! "$file" =~ ($IGNORE_PATTERNS)$ ]]; then
+                        all_files_ignored=false
+                        break
+                    fi
+                done <<< "$changed_files"
+            fi
             
             # Skip version bump if all changed files are ignored
             if [ "$all_files_ignored" = true ]; then
@@ -206,17 +234,14 @@ runs:
             fi
                         
             # Skip commits with specific prefixes
-            SKIP_PREFIX_PATTERN="^(ci|chore|docs|test|build|style)"
+            SKIP_PREFIX_PATTERN="^(ci|chore|docs|test|build|style)(\([^)]*\))?:[[:space:]]"
             if [[ "$commit_message" =~ $SKIP_PREFIX_PATTERN ]]; then
-                # Check if there's a colon somewhere (with or without scope)
-                if [[ "$commit_message" =~ : ]]; then
-                    continue
-                fi
+                echo "Skipping commit with prefix: ${BASH_REMATCH[1]}"
+                continue
             fi
             
             # Check for breaking changes or specific prefixes indicating major changes
-            MAJOR_PREFIX_PATTERN="^(bug|feat|chore|ci)"
-            if [[ ("$commit_message" =~ $MAJOR_PREFIX_PATTERN && "$commit_message" =~ !) || "$commit_message" =~ breaking ]]; then
+            if [[ "$commit_message" =~ [!] || "$commit_message" =~ breaking ]]; then
                 MAJOR=$((MAJOR + 1))
                 MINOR=0
                 PATCH=0
@@ -225,6 +250,11 @@ runs:
                   "$commit_message" =~ fixed || "$commit_message" =~ fixes || "$commit_message" =~ fixing || 
                   "$commit_message" =~ fixup ]]; then
                 PATCH=$((PATCH + 1))
+            # Check for features in commit message
+            elif [[ "$commit_message" =~ feat: || "$commit_message" =~ feature: ]]; then
+                echo "Incrementing MINOR version for feature commit"
+                MINOR=$((MINOR + 1))
+                PATCH=0
             # Attempt to determine change type from issue or pull request
             else
                 # Extract URL or issue number
@@ -234,17 +264,23 @@ runs:
                     details=$(fetch_github_details "$url_or_issue")
                     type=$(echo "$details" | jq -r '.type')
                     label=$(echo "$details" | jq -r '.label')
+                    
+                    echo "Issue details - type: $type, label: $label"
 
-                    if [[ "$type" == "feature" ]]; then
+                    if [[ "$label" == "feature" ]]; then
+                        echo "Incrementing MINOR version for feature"
                         MINOR=$((MINOR + 1))
                         PATCH=0
-                    elif [[ "$type" == "bug" || "$label" == "bug" ]]; then
+                    elif [[ "$label" == "bug" ]]; then
+                        echo "Incrementing PATCH version for bug"
                         PATCH=$((PATCH + 1))
+                    else
+                        # Default to no increment if no specific type is found in the issue
+                        echo "No specific issue type found, not incrementing version"
                     fi
                 else
-                    # Default to minor increment if no specific type is found
-                    MINOR=$((MINOR + 1))
-                    PATCH=0
+                    # Default to no increment if no specific type is found in the commit message
+                    echo "No issue reference found, not incrementing version"
                 fi
             fi
             
@@ -278,15 +314,23 @@ runs:
         VERSION_RPM=$(echo "$VERSION_FULL" | tr '-' '.')
         VERSION_DEB=$(echo "$VERSION_FULL")
 
+        # Output version information regardless of whether it's changed
+        echo "New version: $NEW_TAG (previous was $LATEST_TAG)"
+        echo "Full version: $VERSION_FULL"
+        echo "RPM version: $VERSION_RPM"
+        echo "DEB version: $VERSION_DEB"
+
+        # Always write version info to output
+        echo "version=$NEW_TAG" >> "$GITHUB_OUTPUT"
+        echo "version_full=$VERSION_FULL" >> "$GITHUB_OUTPUT"
+        echo "version_rpm=$VERSION_RPM" >> "$GITHUB_OUTPUT"
+        echo "version_deb=$VERSION_DEB" >> "$GITHUB_OUTPUT"
+
         # Create and push new tag if it's different from the latest
         if [ "$NEW_TAG" != "$LATEST_TAG" ]; then
-            echo "New version: $NEW_TAG (previous was $LATEST_TAG)"
-            echo "Full version: $VERSION_FULL"
-            echo "RPM version: $VERSION_RPM"
-            echo "DEB version: $VERSION_DEB"
-
             # Create tag
-            #git tag $NEW_TAG
+            echo "Creating tag: $NEW_TAG"
+            git tag $NEW_TAG
 
             # Debug info
             if [ -n "$GITHUB_ACTOR" -a -n "$GITHUB_REPOSITORY" ]; then
@@ -305,19 +349,10 @@ runs:
                 #     echo "::error::Failed to push new tag. Please check if the provided token has sufficient permissions."
                 #     exit 1
                 # }
-                echo "version=$NEW_TAG" >> $GITHUB_OUTPUT
-                echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
-                echo "version_rpm=$VERSION_RPM" >> $GITHUB_OUTPUT
-                echo "version_deb=$VERSION_DEB" >> $GITHUB_OUTPUT
             fi
-        elif [ -n "$HAS_RELEASE_TAG" ]; then
-            # Output version info even if tag hasn't changed, when release tag is present
-            echo "version=$NEW_TAG" >> $GITHUB_OUTPUT
-            echo "version_full=$VERSION_FULL" >> $GITHUB_OUTPUT
-            echo "version_rpm=$VERSION_RPM" >> $GITHUB_OUTPUT
-            echo "version_deb=$VERSION_DEB" >> $GITHUB_OUTPUT
         fi
-        echo "RESULT: "; cat $GITHUB_OUTPUT
+        
+        echo "RESULT: "; cat "$GITHUB_OUTPUT"
 
 branding:
   icon: git-merge
