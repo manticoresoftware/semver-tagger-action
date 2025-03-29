@@ -70,7 +70,6 @@ runs:
 
             # Fetch details using GitHub API
             response=$(curl -s -H "Authorization: token $token" "$api_url")
-            echo $response >&2
 
             # Check for errors
             if [[ $(echo "$response" | jq -r '.message // empty') == "Not Found" ]]; then
