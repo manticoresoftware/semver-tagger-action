@@ -344,10 +344,10 @@ runs:
                 echo "remote set-url origin ..."
                 git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
                 echo "git push origin $NEW_TAG"
-                # git push origin $NEW_TAG || {
-                #     echo "::error::Failed to push new tag. Please check if the provided token has sufficient permissions."
-                #     exit 1
-                # }
+                git push origin $NEW_TAG || {
+                    echo "::error::Failed to push new tag. Please check if the provided token has sufficient permissions."
+                    exit 1
+                }
             fi
         fi
         
