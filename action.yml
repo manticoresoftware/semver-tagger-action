@@ -137,7 +137,7 @@ runs:
 
         # Function to print result information
         print_result() {
-            safe_echo "\n${GREEN}=== RESULT ===${NC}"
+            safe_echo "${GREEN}=== RESULT ===${NC}"
             safe_echo "${GREEN}Version:${NC}      $1"
             safe_echo "${GREEN}Full Version:${NC} $2"
             safe_echo "${GREEN}RPM Version:${NC}  $3"
