@@ -85,7 +85,7 @@ runs:
 
         # Function to print section headers
         print_header() {
-            safe_echo "\n${BLUE}=== $1 ===${NC}"
+            safe_echo "${BLUE}=== $1 ===${NC}"
         }
 
         # Function to print info messages
