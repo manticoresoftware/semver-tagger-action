@@ -7,7 +7,11 @@ inputs:
   ignore_patterns:
     description: 'Pipe-separated list of file patterns to ignore when calculating version bump'
     required: false
-    default: '.md|.github/|.yml|.gitignore'
+    default: '\.md$|\.txt$|^test/|^manual/|\.clt|\.github|\.patterns|\.yml|\.gitignore'
+  debug:
+    description: 'Enable debug mode'
+    required: false
+    default: 'false'
 outputs:
   version:
     description: 'The new version tag created by the action'
@@ -40,6 +44,7 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         IGNORE_PATTERNS: ${{ inputs.ignore_patterns }}
+        DEBUG: ${{ inputs.debug }}
       run: |
         # Color settings
         # Check if colors should be disabled (NO_COLOR env var is common standard)
