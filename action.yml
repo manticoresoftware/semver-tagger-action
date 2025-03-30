@@ -171,7 +171,7 @@ runs:
             fi
 
             # Only push if we have GitHub credentials
-            if [ -n "$GITHUB_ACTOR" -a -n "$GITHUB_REPOSITORY" -a -n "$GITHUB_TOKEN" ]; then
+            if [ -n "$GITHUB_REPOSITORY" -a -n "$GITHUB_TOKEN" ]; then
                 print_info "Pushing ${#CREATED_TAGS[@]} new tags to remote"
                 
                 # Join tags with commas for display
@@ -354,10 +354,8 @@ runs:
         print_debug "Ignore patterns: $IGNORE_PATTERNS"
 
         # Setup git for tag creation if in GitHub Actions
-        if [ -n "$GITHUB_ACTOR" -a -n "$GITHUB_REPOSITORY" -a -n "$GITHUB_TOKEN" ]; then
+        if [ -n "$GITHUB_REPOSITORY" -a -n "$GITHUB_TOKEN" ]; then
             print_info "Configuring git for GitHub Actions"
-            git config --global user.name "$GITHUB_ACTOR"
-            git config --global user.email "$GITHUB_ACTOR@users.noreply.github.com"
             git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
         else
             print_warning "Not a GitHub Actions environment, skipping git configuration"
