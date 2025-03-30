@@ -169,7 +169,7 @@ runs:
                 print_info "No new tags to push"
                 return
             fi
-            
+
             # Only push if we have GitHub credentials
             if [ -n "$GITHUB_ACTOR" -a -n "$GITHUB_REPOSITORY" -a -n "$GITHUB_TOKEN" ]; then
                 print_info "Pushing ${#CREATED_TAGS[@]} new tags to remote"
@@ -181,7 +181,10 @@ runs:
                 # Push all tags at once
                 git push origin ${CREATED_TAGS[@]} || {
                     print_error "Failed to push tags. Please check if the provided token has sufficient permissions."
+                    exit 1
                 }
+            else
+                print_warning "Not a GitHub Actions environment, skipping tag push"
             fi
         }
 
@@ -356,6 +359,8 @@ runs:
             git config --global user.name "$GITHUB_ACTOR"
             git config --global user.email "$GITHUB_ACTOR@users.noreply.github.com"
             git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+        else
+            print_warning "Not a GitHub Actions environment, skipping git configuration"
         fi
 
         # Variable to track the current version
