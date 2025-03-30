@@ -174,9 +174,9 @@ runs:
                 print_info "Tags: $tags_str"
                 
                 # Push all tags at once
-                #git push origin ${CREATED_TAGS[@]} || {
-                #    print_error "Failed to push tags. Please check if the provided token has sufficient permissions."
-                #}
+                git push origin ${CREATED_TAGS[@]} || {
+                    print_error "Failed to push tags. Please check if the provided token has sufficient permissions."
+                }
             fi
         }
 
