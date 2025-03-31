@@ -25,6 +25,9 @@ outputs:
   version_deb:
     description: 'Full version string including branch and commit information for DEB'
     value: ${{ steps.calculate-version.outputs.version_deb }}
+  version_updated:
+    description: 'Indicates whether the version was updated (true/false)'
+    value: ${{ steps.calculate-version.outputs.version_updated }}
   target:
     description: 'Build target - release or dev depending on presence of release tag'
     value: ${{ steps.calculate-version.outputs.target }}
@@ -337,8 +340,11 @@ runs:
                 echo "version_full=$VERSION_FULL" >> "$GITHUB_OUTPUT"
                 echo "version_rpm=$VERSION_RPM" >> "$GITHUB_OUTPUT"
                 echo "version_deb=$VERSION_DEB" >> "$GITHUB_OUTPUT"
+                echo "version_updated=false" >> "$GITHUB_OUTPUT"
                 
                 print_result "$LATEST_TAG" "$VERSION_FULL" "$VERSION_RPM" "$VERSION_DEB" "$TARGET"
+            else
+                echo "version_updated=false" >> "$GITHUB_OUTPUT"
             fi
             exit 0
         fi
@@ -373,6 +379,9 @@ runs:
         COMMIT_COUNT=0
         TOTAL_COMMITS=$(echo "$COMMIT_HASHES" | wc -l | tr -d ' ')
         print_info "Found $TOTAL_COMMITS commits to analyze"
+
+        # Variable to track if version was updated
+        VERSION_UPDATED=false
 
         while IFS= read -r commit_hash; do
             COMMIT_COUNT=$((COMMIT_COUNT + 1))
@@ -518,6 +527,7 @@ runs:
                     print_increment "Version changed from $OLD_VERSION to $NEW_VERSION"
                     create_version_tag "$NEW_VERSION" "$commit_hash"
                     CURRENT_VERSION="$NEW_VERSION"
+                    VERSION_UPDATED=true
                 fi
             fi
         done <<< "$COMMIT_HASHES"
@@ -560,6 +570,7 @@ runs:
         echo "version_full=$VERSION_FULL" >> "$GITHUB_OUTPUT"
         echo "version_rpm=$VERSION_RPM" >> "$GITHUB_OUTPUT"
         echo "version_deb=$VERSION_DEB" >> "$GITHUB_OUTPUT"
+        echo "version_updated=$VERSION_UPDATED" >> "$GITHUB_OUTPUT"
 
         # Print final results
         print_result "$NEW_TAG" "$VERSION_FULL" "$VERSION_RPM" "$VERSION_DEB" "$TARGET"
