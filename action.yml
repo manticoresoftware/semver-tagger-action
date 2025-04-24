@@ -8,6 +8,10 @@ inputs:
     description: 'Pipe-separated list of file patterns to ignore when calculating version bump'
     required: false
     default: '\.md$|\.txt$|^test/|^manual/|\.clt|\.github|\.patterns|\.yml|\.gitignore'
+  conventional_commits_authors:
+    description: 'Comma-separated list of commit authors whose commits should be analyzed following strict Conventional Commits rules'
+    required: false
+    default: ''
   debug:
     description: 'Enable debug mode'
     required: false
@@ -35,12 +39,6 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - uses: actions/checkout@v4
-      env:
-        GH_REPOSITORY_REF: ${{ github.head_ref || github.ref }}
-      with:
-        fetch-depth: 0
-        ref: ${{ env.GH_REPOSITORY_REF }}
     - name: Calculate and push new version tag
       id: calculate-version
       shell: bash
@@ -48,6 +46,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
         IGNORE_PATTERNS: ${{ inputs.ignore_patterns }}
         DEBUG: ${{ inputs.debug }}
+        CONVENTIONAL_COMMITS_AUTHORS: ${{ inputs.conventional_commits_authors }}
       run: |
         # Color settings
         # Check if colors should be disabled (NO_COLOR env var is common standard)
@@ -164,6 +163,7 @@ runs:
             
             # Add tag to the list of created tags
             CREATED_TAGS+=("$tag")
+            print_debug "Added tag $tag to CREATED_TAGS array (current size: ${#CREATED_TAGS[@]})"
         }
 
         # Function to push all created tags at once
@@ -179,13 +179,23 @@ runs:
                 
                 # Join tags with commas for display
                 local tags_str=$(IFS=, ; echo "${CREATED_TAGS[*]}")
-                print_info "Tags: $tags_str"
+                print_info "Tags to push: $tags_str"
                 
-                # Push all tags at once
+                # Try to push all tags
                 git push origin ${CREATED_TAGS[@]} || {
-                    print_error "Failed to push tags. Please check if the provided token has sufficient permissions."
-                    exit 1
+                    print_warning "Failed to push some tags, checking if the latest tag was pushed"
                 }
+
+                # Get the latest tag (last in the array)
+                local latest_tag="${CREATED_TAGS[-1]}"
+                
+                # Check if the latest tag exists remotely
+                if ! git ls-remote --tags origin "$latest_tag" | grep -q "$latest_tag"; then
+                    print_error "The latest tag ($latest_tag) is not present in the remote repository. Please check if the provided token has sufficient permissions."
+                    exit 1
+                else
+                    print_info "The latest tag ($latest_tag) is present in the remote repository"
+                fi
             else
                 print_warning "Not a GitHub Actions environment, skipping tag push"
             fi
@@ -215,13 +225,10 @@ runs:
             if [[ "$url_or_issue" =~ ^https://github\.com/ ]]; then
                 # Extract the repo from URL if provided
                 repo_from_url=$(echo "$url_or_issue" | sed -E 's|https://github.com/([^/]+/[^/]+).*|\1|')
-                # If the URL contains issue or PR number, use it directly
-                if [[ "$url_or_issue" =~ issues/[0-9]+ || "$url_or_issue" =~ pull/[0-9]+ ]]; then
-                    api_url="${url_or_issue/github.com/api.github.com/repos}"
-                else
-                    # Otherwise construct the API URL using the repo from URL
-                    api_url="https://api.github.com/repos/${repo_from_url}"
-                fi
+                # Extract the issue/PR number from the URL
+                issue_number=$(echo "$url_or_issue" | grep -oE '[0-9]+' | head -n 1)
+                # Always use the issues endpoint
+                api_url="https://api.github.com/repos/${repo_from_url}/issues/${issue_number}"
             else
                 # If just an issue number is provided (e.g., #123), use the current repository
                 api_url="https://api.github.com/repos/$repo/issues/${url_or_issue/#\#/}"
@@ -280,6 +287,200 @@ runs:
             result="{\"type\": \"$issue_type\", \"label\": \"$label\"}"
             print_debug "Returning result: $result" >&2
             echo "$result"
+        }
+
+        # Function to check if commit follows conventional commits format
+        is_conventional_commit() {
+            local message="$1"
+            local pattern="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([a-z0-9-]+\))?!?:[[:space:]]"
+            # Check for conventional commit format: type(scope): description
+            # or type(scope)!: description for breaking changes
+            if [[ "$message" =~ $pattern ]]; then
+                return 0
+            fi
+            return 1
+        }
+
+        # Function to check if author should use conventional commits
+        should_use_conventional_commits() {
+            local author="$1"
+            if [ -z "$CONVENTIONAL_COMMITS_AUTHORS" ]; then
+                return 1
+            fi
+            # Convert comma-separated list to array
+            IFS=',' read -ra AUTHORS <<< "$CONVENTIONAL_COMMITS_AUTHORS"
+            for a in "${AUTHORS[@]}"; do
+                if [[ "$author" == *"$a"* ]]; then
+                    return 0
+                fi
+            done
+            return 1
+        }
+
+        # Function to analyze commit message for version bump
+        analyze_commit_message() {
+            local commit_message="$1"
+            local commit_author="$2"
+            local version_incremented=0
+            local old_version="${MAJOR}.${MINOR}.${PATCH}"
+
+            # 1. Validate conventional commits format if author is in the list
+            if should_use_conventional_commits "$commit_author"; then
+                print_debug "Author $commit_author is in conventional commits list, applying strict rules"
+                if ! is_conventional_commit "$commit_message"; then
+                    print_warning "Commit does not follow conventional commits format, skipping version bump"
+                    return 1
+                fi
+            fi
+
+            # 2. Check for breaking changes (highest priority)
+            local breaking_pattern="^(\w+)(\([^)]+\))?!:"
+            if [[ "$commit_message" =~ $breaking_pattern || "$commit_message" =~ BREAKING[[:space:]]+CHANGE: ]]; then
+                print_info "Found breaking change in commit message"
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+                print_increment "Found breaking change! Incrementing MAJOR version to $MAJOR.$MINOR.$PATCH"
+                version_incremented=1
+                CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                return 0
+            fi
+
+            # 3. Check for explicit version change
+            if [[ "$commit_message" =~ [Vv]ersion[[:space:]]+from[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]+to[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+                old_ver="${BASH_REMATCH[1]}"
+                new_ver="${BASH_REMATCH[2]}"
+                print_info "Found explicit version change from $old_ver to $new_ver"
+                
+                # Parse old and new versions
+                IFS='.' read -r old_major old_minor old_patch <<< "$old_ver"
+                IFS='.' read -r new_major new_minor new_patch <<< "$new_ver"
+                
+                # Determine what component changed
+                if [ "$new_major" -gt "$old_major" ]; then
+                    print_info "MAJOR version increment detected"
+                    MAJOR=$((MAJOR + 1))
+                    MINOR=0
+                    PATCH=0
+                    version_incremented=1
+                    print_increment "Incrementing MAJOR version to $MAJOR.$MINOR.$PATCH based on commit message"
+                elif [ "$new_minor" -gt "$old_minor" ]; then
+                    print_info "MINOR version increment detected"
+                    MINOR=$((MINOR + 1))
+                    PATCH=0
+                    version_incremented=1
+                    print_increment "Incrementing MINOR version to $MAJOR.$MINOR.$PATCH based on commit message"
+                elif [ "$new_patch" -gt "$old_patch" ]; then
+                    print_info "PATCH version increment detected"
+                    PATCH=$((PATCH + 1))
+                    version_incremented=1
+                    print_increment "Incrementing PATCH version to $MAJOR.$MINOR.$PATCH based on commit message"
+                else
+                    print_warning "Version in commit message doesn't indicate an increment"
+                fi
+
+                if [ $version_incremented -eq 1 ]; then
+                    CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                    return 0
+                fi
+            fi
+
+            # 4. Check commit message patterns (conventional and legacy)
+            # First check conventional format
+            if [[ "$commit_message" =~ ^feat[[:space:]]*\([[:alnum:]-]+\):[[:space:]] ]] || [[ "$commit_message" =~ ^feat:[[:space:]] ]]; then
+                print_info "Found conventional feature commit"
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                version_incremented=1
+                print_increment "Found feature commit (conventional). Incrementing MINOR version to $MAJOR.$MINOR.$PATCH"
+                CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                return 0
+            elif [[ "$commit_message" =~ ^fix[[:space:]]*\([[:alnum:]-]+\):[[:space:]] ]] || [[ "$commit_message" =~ ^fix:[[:space:]] ]]; then
+                print_info "Found conventional fix commit"
+                PATCH=$((PATCH + 1))
+                version_incremented=1
+                print_increment "Found bug fix (conventional). Incrementing PATCH version to $MAJOR.$MINOR.$PATCH"
+                CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                return 0
+            fi
+
+            # Then check legacy format
+            if [[ "$commit_message" =~ feature: || "$commit_message" =~ ^feature ]]; then
+                print_info "Found legacy feature commit"
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                version_incremented=1
+                print_increment "Found feature commit (legacy). Incrementing MINOR version to $MAJOR.$MINOR.$PATCH"
+                CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                return 0
+            elif [[ "$commit_message" =~ fix ]]; then
+                print_info "Found legacy fix commit"
+                PATCH=$((PATCH + 1))
+                version_incremented=1
+                print_increment "Found bug fix (legacy). Incrementing PATCH version to $MAJOR.$MINOR.$PATCH"
+                CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                return 0
+            fi
+
+            # 5. Check GitHub references (lowest priority)
+            url_or_issue=$(echo "$commit_message" | grep -oE 'https://github\.com/[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+(/[a-zA-Z0-9._/-]+)?' | head -n 1)
+            if [[ -n "$url_or_issue" ]]; then
+                print_info "Found issue reference: $url_or_issue"
+                
+                # Fetch issue or PR details using GitHub API
+                details=$(fetch_github_details "$url_or_issue")
+                type=$(echo "$details" | jq -r '.type')
+                label=$(echo "$details" | jq -r '.label')
+                
+                print_info "Issue details - type: $type, label: $label"
+
+                # Prioritize PR over issue
+                if [[ "$type" == "pull_request" ]]; then
+                    if [[ "$label" == "feature" ]]; then
+                        print_info "Found feature PR"
+                        MINOR=$((MINOR + 1))
+                        PATCH=0
+                        version_incremented=1
+                        print_increment "Found feature PR. Incrementing MINOR version to $MAJOR.$MINOR.$PATCH"
+                        CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                        return 0
+                    elif [[ "$label" == "bug" ]]; then
+                        print_info "Found bug PR"
+                        PATCH=$((PATCH + 1))
+                        version_incremented=1
+                        print_increment "Found bug PR. Incrementing PATCH version to $MAJOR.$MINOR.$PATCH"
+                        CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                        return 0
+                    else
+                        print_warning "PR has no relevant label (feature/bug)"
+                    fi
+                elif [[ "$type" == "issue" ]]; then
+                    if [[ "$label" == "feature" ]]; then
+                        print_info "Found feature issue"
+                        MINOR=$((MINOR + 1))
+                        PATCH=0
+                        version_incremented=1
+                        print_increment "Found feature issue. Incrementing MINOR version to $MAJOR.$MINOR.$PATCH"
+                        CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                        return 0
+                    elif [[ "$label" == "bug" ]]; then
+                        print_info "Found bug issue"
+                        PATCH=$((PATCH + 1))
+                        version_incremented=1
+                        print_increment "Found bug issue. Incrementing PATCH version to $MAJOR.$MINOR.$PATCH"
+                        CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                        return 0
+                    else
+                        print_warning "Issue has no relevant label (feature/bug)"
+                    fi
+                else
+                    print_warning "Unknown reference type: $type"
+                fi
+            fi
+
+            # No version bump if no rules matched
+            print_warning "No version bump rules matched for this commit"
+            return 1
         }
 
         print_header "FETCHING TAGS"
@@ -372,7 +573,7 @@ runs:
         # Variable to track the current version
         CURRENT_VERSION="$LATEST_TAG"
 
-        # Array to keep track of created tags
+        # Initialize CREATED_TAGS array
         CREATED_TAGS=()
 
         # Process each commit
@@ -385,9 +586,12 @@ runs:
 
         while IFS= read -r commit_hash; do
             COMMIT_COUNT=$((COMMIT_COUNT + 1))
-            # Get commit message
+            # Get commit message and author
             commit_message=$(git log -1 --format="%B" $commit_hash)
+            commit_author=$(git log -1 --format="%an <%ae>" $commit_hash)
+            print_debug "==============================="
             print_debug "Commit message: $commit_message"
+            print_debug "Commit author: $commit_author"
             
             # Get changed files for this commit
             changed_files=$(git diff-tree --no-commit-id --name-only -r "$commit_hash")
@@ -395,13 +599,12 @@ runs:
             # Print short commit info
             commit_short=$(git log -1 --format="%h" $commit_hash)
             commit_subject=$(echo "$commit_message" | head -n 1)
-            print_info "[$COMMIT_COUNT/$TOTAL_COMMITS] Analyzing commit: $commit_short - $commit_subject"
+            print_info "[$COMMIT_COUNT/$TOTAL_COMMITS] Analyzing commit: $commit_short - $commit_subject - by $commit_author"
             
             # Display changed files if in debug mode
             print_file_list "$changed_files"
             
             # Variables to track if version was incremented
-            VERSION_INCREMENTED=false
             OLD_VERSION="${MAJOR}.${MINOR}.${PATCH}"
 
             # Skip if no files were changed (e.g. merge commits)
@@ -429,106 +632,11 @@ runs:
                 print_warning "All changed files are ignored, skipping version bump"
                 continue
             fi
-                        
-            # Skip commits with specific prefixes
-            SKIP_PREFIX_PATTERN="^(ci|chore|docs|test|build|style)(\([^)]*\))?:[[:space:]]"
-            if [[ "$commit_message" =~ $SKIP_PREFIX_PATTERN ]]; then
-                print_warning "Skipping commit with prefix: ${BASH_REMATCH[1]}"
-                continue
-            fi
             
-            # Check for explicit version change in commit message
-            if [[ "$commit_message" =~ [Vv]ersion[[:space:]]+from[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]+to[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-                old_ver="${BASH_REMATCH[1]}"
-                new_ver="${BASH_REMATCH[2]}"
-                print_info "Found explicit version change from $old_ver to $new_ver"
-                
-                # Parse old and new versions
-                IFS='.' read -r old_major old_minor old_patch <<< "$old_ver"
-                IFS='.' read -r new_major new_minor new_patch <<< "$new_ver"
-                
-                # Determine what component changed
-                if [ "$new_major" -gt "$old_major" ]; then
-                    print_info "MAJOR version increment detected"
-                    MAJOR=$((MAJOR + 1))
-                    MINOR=0
-                    PATCH=0
-                    VERSION_INCREMENTED=true
-                    print_increment "Incrementing MAJOR version to $MAJOR.$MINOR.$PATCH based on commit message"
-                elif [ "$new_minor" -gt "$old_minor" ]; then
-                    print_info "MINOR version increment detected"
-                    MINOR=$((MINOR + 1))
-                    PATCH=0
-                    VERSION_INCREMENTED=true
-                    print_increment "Incrementing MINOR version to $MAJOR.$MINOR.$PATCH based on commit message"
-                elif [ "$new_patch" -gt "$old_patch" ]; then
-                    print_info "PATCH version increment detected"
-                    PATCH=$((PATCH + 1))
-                    VERSION_INCREMENTED=true
-                    print_increment "Incrementing PATCH version to $MAJOR.$MINOR.$PATCH based on commit message"
-                else
-                    print_warning "Version in commit message doesn't indicate an increment"
-                fi
-            # Check for breaking changes or specific prefixes indicating major changes
-            elif [[ "$commit_message" =~ [!] || "$commit_message" =~ breaking ]]; then
-                MAJOR=$((MAJOR + 1))
-                MINOR=0
-                PATCH=0
-                print_increment "Found breaking change! Incrementing MAJOR version to $MAJOR.$MINOR.$PATCH"
-                VERSION_INCREMENTED=true
-            # Check for fixes
-            elif [[ "$commit_message" =~ fix || "$commit_message" =~ bugfix || "$commit_message" =~ bugfixing || 
-                    "$commit_message" =~ fixed || "$commit_message" =~ fixes || "$commit_message" =~ fixing || 
-                    "$commit_message" =~ fixup ]]; then
-                PATCH=$((PATCH + 1))
-                print_increment "Found bug fix. Incrementing PATCH version to $MAJOR.$MINOR.$PATCH"
-                VERSION_INCREMENTED=true
-            # Check for features in commit message
-            elif [[ "$commit_message" =~ feat: || "$commit_message" =~ feature: ]]; then
-                MINOR=$((MINOR + 1))
-                PATCH=0
-                print_increment "Found feature commit. Incrementing MINOR version to $MAJOR.$MINOR.$PATCH"
-                VERSION_INCREMENTED=true
-            # Attempt to determine change type from issue or pull request
-            else
-                # Extract URL or issue number
-                if [[ "$commit_message" =~ (https://github\.com/[^ ]+|#[0-9]+) ]]; then
-                    url_or_issue="${BASH_REMATCH[1]}"
-                    print_info "Found issue reference: $url_or_issue"
-                    
-                    # Fetch issue or PR details using GitHub API
-                    details=$(fetch_github_details "$url_or_issue")
-                    type=$(echo "$details" | jq -r '.type')
-                    label=$(echo "$details" | jq -r '.label')
-                    
-                    print_info "Issue details - type: $type, label: $label"
-
-                    if [[ "$label" == "feature" ]]; then
-                        MINOR=$((MINOR + 1))
-                        PATCH=0
-                        print_increment "Found feature issue. Incrementing MINOR version to $MAJOR.$MINOR.$PATCH"
-                        VERSION_INCREMENTED=true
-                    elif [[ "$label" == "bug" ]]; then
-                        PATCH=$((PATCH + 1))
-                        print_increment "Found bug issue. Incrementing PATCH version to $MAJOR.$MINOR.$PATCH"
-                        VERSION_INCREMENTED=true
-                    else
-                        print_warning "No specific issue type found, not incrementing version"
-                    fi
-                else
-                    print_warning "No issue reference found, not incrementing version"
-                fi
-            fi
-            
-            # Create a tag if version was incremented
-            if [ "$VERSION_INCREMENTED" = true ]; then
-                NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-                if [ "$NEW_VERSION" != "$OLD_VERSION" ]; then
-                    print_increment "Version changed from $OLD_VERSION to $NEW_VERSION"
-                    create_version_tag "$NEW_VERSION" "$commit_hash"
-                    CURRENT_VERSION="$NEW_VERSION"
-                    VERSION_UPDATED=true
-                fi
+            # Analyze commit message for version bump
+            if analyze_commit_message "$commit_message" "$commit_author"; then
+                create_version_tag "$CURRENT_VERSION" "$commit_hash"
+                VERSION_UPDATED=true
             fi
         done <<< "$COMMIT_HASHES"
 
