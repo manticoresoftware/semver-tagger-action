@@ -15,7 +15,7 @@ This GitHub action automatically creates and pushes version tags based on your c
 6. Outputs both simple version (X.Y.Z) and full version with metadata
 
 For example:
-- If current version is `v1.2.3` and you commit with "breaking: new API"
+- If current version is `v1.2.3` and you commit with "feat!: new API"
   → Action creates tag `v2.0.0`
 - If current version is `v1.2.3` and you commit with "feat: new login"
   → Action creates tag `v1.3.0`
@@ -114,6 +114,64 @@ You can customize this list using the `ignore_patterns` input parameter.
 | `version_deb` | DEB-compatible version | `1.2.3+23041507-a1b2c3d4` |
 | `version_updated` | Whether version was updated | `true` |
 | `target` | Build target | `release` or `dev` |
+
+## How it works: Core Rules (Ordered by Precedence)
+
+### 1. Breaking Change (Highest Priority)
+- **Triggers:**
+  - Commit message matches `^(\w+)(\([^)]+\))?!:`
+  - Commit message contains footer "BREAKING CHANGE:"
+- **Effect:** 
+  - Increment major version
+  - Reset minor and patch to 0
+
+### 2. Explicit Version Change
+- **Triggers:**
+  - Commit message matches "Version from X.Y.Z to A.B.C"
+- **Analysis:**
+  - If major increased → increment major, reset minor and patch
+  - If minor increased → increment minor, reset patch
+  - If patch increased → increment patch
+
+### 3. Commit Message
+- **Conventional Format:**
+  - `feat:` → increment minor, reset patch
+  - `fix:` → increment patch
+- **Legacy Format:**
+  - `feature:` → increment minor, reset patch
+  - Contains "fix" → increment patch
+- **Precedence:** Conventional > Legacy
+
+### 4. GitHub Reference (Lowest Priority)
+- **Triggers:**
+  - PR/issue labeled "feature" or type "Feature" → increment minor, reset patch
+  - PR/issue labeled "bug" or type "Bug" → increment patch
+- **Precedence:** PR > Issue
+
+## Validation
+- **Conventional Commits Pattern:**
+  ```
+  ^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([a-z0-9-]+\))?!?:[[:space:]]
+  ```
+- Required for authors listed in `conventional_commits_authors`
+
+## Filters
+Commits are ignored when:
+- Commit message matches `^(ci|chore|docs|test)(\([^)]+\))?:`
+- Modified files match `ignore_patterns`
+- Merge commit with no file changes
+- All changed files are ignored
+
+## Execution Flow
+1. Skip if matches ignore filters
+2. For conventional authors:
+   - Reject if commit message doesn't match validation pattern
+3. Check for triggers in resolution order
+4. Apply first matching effect
+5. If no triggers → no version bump
+6. Create git tag
+7. Generate version formats
+8. Push tags if in GitHub Actions
 
 ## License
 
