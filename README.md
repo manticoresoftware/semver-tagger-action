@@ -32,6 +32,10 @@ jobs:
     outputs:
       version: ${{ steps.semver-tagger.outputs.version }}
       version_full: ${{ steps.semver-tagger.outputs.version_full }}
+      version_rpm: ${{ steps.semver-tagger.outputs.version_rpm }}
+      version_deb: ${{ steps.semver-tagger.outputs.version_deb }}
+      target: ${{ steps.semver-tagger.outputs.target }}
+      version_updated: ${{ steps.semver-tagger.outputs.version_updated }}
       target: ${{ steps.semver-tagger.outputs.target }}
     permissions:
       contents: write  # Required for pushing tags
@@ -40,6 +44,9 @@ jobs:
         uses: manticoresoftware/semver-tagger-action@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          conventional_commits_authors: "user@example.com"  # Optional: enforce conventional commits for specific authors
+          debug: true  # Optional: enable debug mode
+          ignore_patterns: "\.md$|\.txt$|^test/|^manual/|\.clt|\.github|\.patterns|\.yml|\.gitignore"  # Optional: customize ignored files
 
   # Optional: Use the version in subsequent jobs
   release:
@@ -50,14 +57,20 @@ jobs:
       - run: |
           echo "New version: ${{ needs.update-version.outputs.version }}"
           echo "Full version: ${{ needs.update-version.outputs.version_full }}"
+          echo "RPM version: ${{ needs.update-version.outputs.version_rpm }}"
+          echo "DEB version: ${{ needs.update-version.outputs.version_deb }}"
+          echo "Version updated: ${{ needs.update-version.outputs.version_updated }}"
           echo "Build target: ${{ needs.update-version.outputs.target }}"
 ```
 
 ### Important Notes
 - The action requires `contents: write` permission to create and push tags
-- The action outputs two version formats and one target:
+- The action outputs multiple version formats and metadata:
   - `version`: Simple semver format (e.g., "1.2.3")
   - `version_full`: Extended format with metadata (e.g., "1.2.3+230415-a1b2c3d4[-dev|-<branch name>")
+  - `version_rpm`: RPM-compatible format (e.g., "1.2.3.230415.a1b2c3d4")
+  - `version_deb`: DEB-compatible format (e.g., "1.2.3+230415-a1b2c3d4")
+  - `version_updated`: Boolean indicating if version was updated
   - `target`: Build target - "release" when commit has release tag, "dev" otherwise
 - The full version format includes:
   - Base version
@@ -71,9 +84,14 @@ jobs:
 
 By default, changes to the following files don't trigger version bumps:
 - Markdown files (*.md)
+- Text files (*.txt)
+- Test files (test/*)
+- Manual files (manual/*)
 - GitHub workflows and configuration (.github/*)
 - YAML files (*.yml)
 - .gitignore
+- .clt files
+- .patterns files
 
 You can customize this list using the `ignore_patterns` input parameter.
 
@@ -82,7 +100,9 @@ You can customize this list using the `ignore_patterns` input parameter.
 | Input | Description | Required | Default |
 |-------|-------------|----------|---------|
 | `github_token` | GitHub token for authentication | Yes | N/A |
-| `ignore_patterns` | Pipe-separated list of file patterns to ignore | No | `.md\|.github/\|.yml\|.gitignore` |
+| `ignore_patterns` | Pipe-separated list of file patterns to ignore | No | `.md$|.txt$|^test/|^manual/|.clt|.github|.patterns|.yml|.gitignore` |
+| `conventional_commits_authors` | Comma-separated list of commit authors whose commits should be analyzed following strict Conventional Commits rules | No | '' |
+| `debug` | Enable debug mode for verbose output | No | 'false' |
 
 ## Outputs
 
@@ -90,6 +110,9 @@ You can customize this list using the `ignore_patterns` input parameter.
 |--------|-------------|---------|
 | `version` | Simple semver version | `1.2.3` |
 | `version_full` | Full version with metadata | `1.2.3+23041507-a1b2c3d4-dev` |
+| `version_rpm` | RPM-compatible version | `1.2.3.23041507.a1b2c3d4` |
+| `version_deb` | DEB-compatible version | `1.2.3+23041507-a1b2c3d4` |
+| `version_updated` | Whether version was updated | `true` |
 | `target` | Build target | `release` or `dev` |
 
 ## License
