@@ -523,16 +523,20 @@ runs:
 
         # Skip if no commits found
         if [ -z "$COMMIT_HASHES" ]; then
-            print_warning "No new commits found since $LATEST_TAG, skipping version bump"
+            print_warning "No new commits found since $LATEST_TAG"
             
-            if [ -n "$HAS_RELEASE_TAG" ]; then
+            # Check if current commit has a tag
+            CURRENT_COMMIT_TAGS=$(git tag --points-at HEAD)
+            if [ -n "$CURRENT_COMMIT_TAGS" ]; then
+                print_info "Current commit already has tags: $CURRENT_COMMIT_TAGS"
+                
                 # Get current commit hash (first 8 chars)
                 COMMIT_HASH=$(git rev-parse --short=8 HEAD)
                 
                 # Get timestamp from the commit
                 TIMESTAMP=$(git log -1 --format="%cd" --date=format:'%y%m%d%H' HEAD)
                 
-                # Output version info for release tag
+                # Output version info
                 VERSION_FULL="${LATEST_TAG}+${TIMESTAMP}-${COMMIT_HASH}"
                 VERSION_RPM=$(echo "$VERSION_FULL" | tr '-' '.')
                 VERSION_DEB=$VERSION_FULL
@@ -545,6 +549,7 @@ runs:
                 
                 print_result "$LATEST_TAG" "$VERSION_FULL" "$VERSION_RPM" "$VERSION_DEB" "$TARGET"
             else
+                print_warning "No tags found on current commit, skipping version bump"
                 echo "version_updated=false" >> "$GITHUB_OUTPUT"
             fi
             exit 0
