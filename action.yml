@@ -545,7 +545,7 @@ runs:
                 echo "version_full=$VERSION_FULL" >> "$GITHUB_OUTPUT"
                 echo "version_rpm=$VERSION_RPM" >> "$GITHUB_OUTPUT"
                 echo "version_deb=$VERSION_DEB" >> "$GITHUB_OUTPUT"
-                echo "version_updated=false" >> "$GITHUB_OUTPUT"
+                echo "version_updated=true" >> "$GITHUB_OUTPUT"
                 
                 print_result "$LATEST_TAG" "$VERSION_FULL" "$VERSION_RPM" "$VERSION_DEB" "$TARGET"
             else
