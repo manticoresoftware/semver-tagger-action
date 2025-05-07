@@ -619,11 +619,11 @@ runs:
             fi
 
             # Skip version bump if commit is not in master/main branch
-            commit_branch=$(git branch -r --contains "$commit_hash" | grep -E 'origin/(master|main)$' || true)
-            if [ -z "$commit_branch" ]; then
+            if ! git branch --contains "$commit_hash" | grep -wq -e 'master' -e 'main'; then
                 print_warning "Commit is not in master/main branch, skipping version bump"
                 continue
             fi
+
             
             # Check if commit touches only ignored files
             all_files_ignored=true
