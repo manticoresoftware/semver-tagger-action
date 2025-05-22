@@ -660,9 +660,11 @@ runs:
         # Get current branch name
         if [ -n "$GITHUB_HEAD_REF" ]; then
             # In a pull request, use the source branch name
+            print_debug "GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
             BRANCH_NAME="$GITHUB_HEAD_REF"
         else
             # In a normal push, use the current branch name
+            print_debug "normal push"
             BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
         fi
         print_debug "Current branch: $BRANCH_NAME"
