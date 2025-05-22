@@ -665,7 +665,7 @@ runs:
         else
             # In a normal push, use the current branch name
             print_debug "normal push"
-            BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+            BRANCH_NAME="$GITHUB_REF"
         fi
         print_debug "Current branch: $BRANCH_NAME"
 
