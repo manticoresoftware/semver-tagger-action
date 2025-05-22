@@ -658,7 +658,13 @@ runs:
         print_info "Final version: $NEW_TAG (started from $LATEST_TAG)"
 
         # Get current branch name
-        BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+        if [ -n "$GITHUB_HEAD_REF" ]; then
+            # In a pull request, use the source branch name
+            BRANCH_NAME="$GITHUB_HEAD_REF"
+        else
+            # In a normal push, use the current branch name
+            BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+        fi
         print_debug "Current branch: $BRANCH_NAME"
 
         # Semver does not allow some symbols that branch may have
