@@ -619,7 +619,7 @@ runs:
             fi
 
             # Skip version bump if commit is not in master/main branch
-            if ! git branch -r --contains "$commit_hash" | grep -wq -e 'origin/master' -e 'origin/main'; then
+            if ! git for-each-ref --contains="$commit_hash" --format='%(refname:short)' refs/remotes/origin/ | grep -wq -e 'origin/master' -e 'origin/main'; then
                 print_warning "Commit is not in master/main branch, skipping version bump"
                 continue
             fi
@@ -669,10 +669,10 @@ runs:
             # Get the commit hash that the tag points to
             TAG_COMMIT=$(git rev-parse $TAG_NAME)
             # Find which branch contains this commit
-            BRANCH_NAME=$(git branch -r --contains $TAG_COMMIT | grep -E 'origin/(master|main)' | head -n 1 | sed 's/origin\///')
+            BRANCH_NAME=$(git for-each-ref --contains=$TAG_COMMIT --format='%(refname:short)' refs/remotes/origin/ | egrep "master|main" | sed 's#^origin/##' | head -n 1)
             if [ -z "$BRANCH_NAME" ]; then
                 # If not found in master/main, take the first branch that contains it
-                BRANCH_NAME=$(git branch -r --contains $TAG_COMMIT | head -n 1 | sed 's/origin\///')
+                BRANCH_NAME=$(git for-each-ref --contains=$TAG_COMMIT --format='%(refname:short)' refs/remotes/origin/ | head -n 1)
             fi
             print_debug "Found branch for tag: $BRANCH_NAME"
         else
