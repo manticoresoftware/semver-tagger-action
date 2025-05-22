@@ -413,7 +413,7 @@ runs:
                 print_increment "Found feature commit (legacy). Incrementing MINOR version to $MAJOR.$MINOR.$PATCH"
                 CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
                 return 0
-            elif [[ "$commit_message" =~ fix ]]; then
+            elif [[ "$commit_message" =~ (^|[[:space:],;:])fix ]]; then
                 print_info "Found legacy fix commit"
                 PATCH=$((PATCH + 1))
                 version_incremented=1
