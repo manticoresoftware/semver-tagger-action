@@ -486,23 +486,23 @@ runs:
         print_header "FETCHING TAGS"
         # git fetch --tags
 
-        # Get all tags that match the pattern
-        MATCHING_TAGS=$(git tag -l "[0-9]*.[0-9]*.[0-9]*")
+        # Get all tags that match the pattern up to the current commit
+        MATCHING_TAGS=$(git tag -l "[0-9]*.[0-9]*.[0-9]*" --merged HEAD)
         print_debug "All tags: $(git tag -l)"
-        print_debug "Matching tags: $MATCHING_TAGS"
+        print_debug "Matching tags up to current commit: $MATCHING_TAGS"
 
         # Check if there are any matching tags
         if [ -n "$MATCHING_TAGS" ]; then
             # Get the latest semver tag
             LATEST_TAG=$(echo "$MATCHING_TAGS" | sort -V | tail -1)
         fi
-        print_info "Latest tag: $LATEST_TAG"
+        print_info "Latest tag up to current commit: $LATEST_TAG"
 
         # Get commit hashes since the latest tag (or all commits if no tag exists)
         if [ -z "$LATEST_TAG" ]; then
             COMMIT_HASHES=$(git log --reverse --format="%H")
             LATEST_TAG="0.0.0"
-            print_info "No existing version tags found, starting from 0.0.0"
+            print_info "No existing version tags found up to current commit, starting from 0.0.0"
         else
             COMMIT_HASHES=$(git log --reverse ${LATEST_TAG}..HEAD --format="%H")
         fi
