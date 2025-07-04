@@ -317,6 +317,19 @@ runs:
             return 1
         }
 
+        # Function to check if commit is a merge commit
+        is_merge_commit() {
+            local commit=$1
+            git log -1 --format="%P" "$commit" | grep -q " "
+        }
+
+        # Function to get commit info
+        get_commit_info() {
+            local commit=$1
+            local info=$(git log -1 --format="%s|%an|%ae|%ad" --date=format:"%Y-%m-%d %H:%M:%S" "$commit")
+            echo "$info"
+        }
+
         # Function to analyze commit message for version bump
         analyze_commit_message() {
             local commit_message="$1"
@@ -334,8 +347,9 @@ runs:
             fi
 
             # 2. Check for breaking changes (highest priority)
-            local breaking_pattern="^(\w+)(\([^)]+\))?!:"
-            if [[ "$commit_message" =~ $breaking_pattern || "$commit_message" =~ BREAKING[[:space:]]+CHANGE: ]]; then
+            # Pattern for type!: or type(scope)!: format
+            local breaking_pattern="^[a-zA-Z]+(\([^)]+\))?!:[[:space:]]"
+            if [[ "$commit_message" =~ $breaking_pattern ]] || [[ "$commit_message" =~ BREAKING[[:space:]]+CHANGE: ]]; then
                 print_info "Found breaking change in commit message"
                 MAJOR=$((MAJOR + 1))
                 MINOR=0
@@ -356,25 +370,25 @@ runs:
                 IFS='.' read -r old_major old_minor old_patch <<< "$old_ver"
                 IFS='.' read -r new_major new_minor new_patch <<< "$new_ver"
                 
-                # Determine what component changed
+                # Determine what component changed and apply the same type of increment to current version
                 if [ "$new_major" -gt "$old_major" ]; then
-                    print_info "MAJOR version increment detected"
+                    print_info "MAJOR version increment detected in commit message"
                     MAJOR=$((MAJOR + 1))
                     MINOR=0
                     PATCH=0
                     version_incremented=1
-                    print_increment "Incrementing MAJOR version to $MAJOR.$MINOR.$PATCH based on commit message"
+                    print_increment "Applying MAJOR version increment to current version: $MAJOR.$MINOR.$PATCH"
                 elif [ "$new_minor" -gt "$old_minor" ]; then
-                    print_info "MINOR version increment detected"
+                    print_info "MINOR version increment detected in commit message"
                     MINOR=$((MINOR + 1))
                     PATCH=0
                     version_incremented=1
-                    print_increment "Incrementing MINOR version to $MAJOR.$MINOR.$PATCH based on commit message"
+                    print_increment "Applying MINOR version increment to current version: $MAJOR.$MINOR.$PATCH"
                 elif [ "$new_patch" -gt "$old_patch" ]; then
-                    print_info "PATCH version increment detected"
+                    print_info "PATCH version increment detected in commit message"
                     PATCH=$((PATCH + 1))
                     version_incremented=1
-                    print_increment "Incrementing PATCH version to $MAJOR.$MINOR.$PATCH based on commit message"
+                    print_increment "Applying PATCH version increment to current version: $MAJOR.$MINOR.$PATCH"
                 else
                     print_warning "Version in commit message doesn't indicate an increment"
                 fi
@@ -386,8 +400,13 @@ runs:
             fi
 
             # 4. Check commit message patterns (conventional and legacy)
-            # First check conventional format
-            if [[ "$commit_message" =~ ^feat[[:space:]]*\([[:alnum:]-]+\):[[:space:]] ]] || [[ "$commit_message" =~ ^feat:[[:space:]] ]]; then
+            # First check conventional format (excluding breaking changes which are handled above)
+            local feat_pattern="^feat(\([[:alnum:]-]+\))?:[[:space:]]"
+            local feat_breaking_pattern="^feat(\([[:alnum:]-]+\))?!:[[:space:]]"
+            local fix_pattern="^fix(\([[:alnum:]-]+\))?:[[:space:]]"
+            local fix_breaking_pattern="^fix(\([[:alnum:]-]+\))?!:[[:space:]]"
+            
+            if [[ "$commit_message" =~ $feat_pattern ]] && [[ ! "$commit_message" =~ $feat_breaking_pattern ]]; then
                 print_info "Found conventional feature commit"
                 MINOR=$((MINOR + 1))
                 PATCH=0
@@ -395,7 +414,7 @@ runs:
                 print_increment "Found feature commit (conventional). Incrementing MINOR version to $MAJOR.$MINOR.$PATCH"
                 CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
                 return 0
-            elif [[ "$commit_message" =~ ^fix[[:space:]]*\([[:alnum:]-]+\):[[:space:]] ]] || [[ "$commit_message" =~ ^fix:[[:space:]] ]]; then
+            elif [[ "$commit_message" =~ $fix_pattern ]] && [[ ! "$commit_message" =~ $fix_breaking_pattern ]]; then
                 print_info "Found conventional fix commit"
                 PATCH=$((PATCH + 1))
                 version_incremented=1
@@ -480,6 +499,145 @@ runs:
 
             # No version bump if no rules matched
             print_warning "No version bump rules matched for this commit"
+            return 1
+        }
+
+        # Function to analyze multiple commits for version bump (used for merge commits)
+        analyze_multiple_commits() {
+            local commits="$1"
+            local highest_increment="none"
+            local version_incremented=0
+            
+            # Track the highest increment type found
+            local found_major=0
+            local found_minor=0
+            local found_patch=0
+            
+            # Store original version state
+            local orig_major=$MAJOR
+            local orig_minor=$MINOR
+            local orig_patch=$PATCH
+            
+            print_debug "Analyzing ${#commits} brought commits for merge increment"
+            
+            # Analyze each commit
+            while IFS= read -r commit_hash; do
+                if [[ -n "$commit_hash" ]]; then
+                    # Get commit message and author
+                    commit_message=$(git log -1 --format="%B" "$commit_hash")
+                    commit_author=$(git log -1 --format="%an <%ae>" "$commit_hash")
+                    commit_short=$(git log -1 --format="%h" "$commit_hash")
+                    
+                    print_info "Testing commit $commit_short ($commit_message) for version increment"
+                    
+                    # Create a temporary copy of analyze_commit_message logic to test increment type
+                    # without actually modifying the version numbers
+                    local temp_increment_type="none"
+                    
+                    # Check for breaking changes (highest priority)
+                    # Pattern for type!: or type(scope)!: format
+                    local breaking_pattern="^[a-zA-Z]+(\([^)]+\))?!:[[:space:]]"
+                    if [[ "$commit_message" =~ $breaking_pattern ]] || [[ "$commit_message" =~ BREAKING[[:space:]]+CHANGE: ]]; then
+                        temp_increment_type="major"
+                        print_info "  -> Breaking change detected (conventional commits ! or BREAKING CHANGE)"
+                    # Check for explicit version change
+                    elif [[ "$commit_message" =~ [Vv]ersion[[:space:]]+from[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]+to[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+                        old_ver="${BASH_REMATCH[1]}"
+                        new_ver="${BASH_REMATCH[2]}"
+                        IFS='.' read -r old_major old_minor old_patch <<< "$old_ver"
+                        IFS='.' read -r new_major new_minor new_patch <<< "$new_ver"
+                        
+                        if [ "$new_major" -gt "$old_major" ]; then
+                            temp_increment_type="major"
+                            print_info "  -> Explicit MAJOR version increment detected"
+                        elif [ "$new_minor" -gt "$old_minor" ]; then
+                            temp_increment_type="minor"
+                            print_info "  -> Explicit MINOR version increment detected"
+                        elif [ "$new_patch" -gt "$old_patch" ]; then
+                            temp_increment_type="patch"
+                            print_info "  -> Explicit PATCH version increment detected"
+                        fi
+                    # Check conventional format (excluding breaking changes which are handled above)
+                    else
+                        local feat_pattern="^feat(\([[:alnum:]-]+\))?:[[:space:]]"
+                        local feat_breaking_pattern="^feat(\([[:alnum:]-]+\))?!:[[:space:]]"
+                        local fix_pattern="^fix(\([[:alnum:]-]+\))?:[[:space:]]"
+                        local fix_breaking_pattern="^fix(\([[:alnum:]-]+\))?!:[[:space:]]"
+                        
+                        if [[ "$commit_message" =~ $feat_pattern ]] && [[ ! "$commit_message" =~ $feat_breaking_pattern ]]; then
+                            temp_increment_type="minor"
+                            print_info "  -> Conventional feature commit detected"
+                        elif [[ "$commit_message" =~ $fix_pattern ]] && [[ ! "$commit_message" =~ $fix_breaking_pattern ]]; then
+                            temp_increment_type="patch"
+                            print_info "  -> Conventional fix commit detected"
+                        # Check legacy format
+                        elif [[ "$commit_message" =~ feature: || "$commit_message" =~ ^feature ]]; then
+                            temp_increment_type="minor"
+                            print_info "  -> Legacy feature commit detected"
+                        elif [[ "$commit_message" =~ (^|[[:space:],;:])fix ]]; then
+                            temp_increment_type="patch"
+                            print_info "  -> Legacy fix commit detected"
+                        # Check GitHub references (lowest priority)
+                        else
+                            url_or_issue=$(echo "$commit_message" | grep -oE 'https://github\.com/[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+(/[a-zA-Z0-9._/-]+)?' | head -n 1)
+                            if [[ -n "$url_or_issue" ]]; then
+                                print_debug "  -> GitHub reference found, checking details"
+                                details=$(fetch_github_details "$url_or_issue")
+                                type=$(echo "$details" | jq -r '.type')
+                                label=$(echo "$details" | jq -r '.label')
+                                
+                                if [[ "$type" == "pull_request" ]] || [[ "$type" == "issue" ]]; then
+                                    if [[ "$label" == "feature" ]]; then
+                                        temp_increment_type="minor"
+                                        print_info "  -> GitHub feature reference detected"
+                                    elif [[ "$label" == "bug" ]]; then
+                                        temp_increment_type="patch"
+                                        print_info "  -> GitHub bug reference detected"
+                                    fi
+                                fi
+                            fi
+                        fi
+                    fi
+                    
+                    # Track the highest increment type
+                    if [[ "$temp_increment_type" == "major" ]]; then
+                        found_major=1
+                        highest_increment="major"
+                    elif [[ "$temp_increment_type" == "minor" ]] && [[ $found_major -eq 0 ]]; then
+                        found_minor=1
+                        highest_increment="minor"
+                    elif [[ "$temp_increment_type" == "patch" ]] && [[ $found_major -eq 0 ]] && [[ $found_minor -eq 0 ]]; then
+                        found_patch=1
+                        highest_increment="patch"
+                    fi
+                fi
+            done <<< "$commits"
+            
+            # Apply the highest increment found
+            if [ $found_major -eq 1 ]; then
+                MAJOR=$((orig_major + 1))
+                MINOR=0
+                PATCH=0
+                version_incremented=1
+                print_increment "Merge requires MAJOR version increment to $MAJOR.$MINOR.$PATCH"
+                CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                return 0
+            elif [ $found_minor -eq 1 ]; then
+                MINOR=$((orig_minor + 1))
+                PATCH=0
+                version_incremented=1
+                print_increment "Merge requires MINOR version increment to $MAJOR.$MINOR.$PATCH"
+                CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                return 0
+            elif [ $found_patch -eq 1 ]; then
+                PATCH=$((orig_patch + 1))
+                version_incremented=1
+                print_increment "Merge requires PATCH version increment to $MAJOR.$MINOR.$PATCH"
+                CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                return 0
+            fi
+            
+            print_warning "No version bump rules matched for merge commits"
             return 1
         }
 
@@ -581,46 +739,228 @@ runs:
         # Initialize CREATED_TAGS array
         CREATED_TAGS=()
 
-        # Process each commit
-        COMMIT_COUNT=0
-        TOTAL_COMMITS=$(echo "$COMMIT_HASHES" | wc -l | tr -d ' ')
-        print_info "Found $TOTAL_COMMITS commits to analyze"
+        # Temporary files for processing (similar to analyze2.sh)
+        MERGE_COMMITS_FILE=$(mktemp)
+        ALL_COMMITS_FILE=$(mktemp)
+        PROCESSED_COMMITS_FILE=$(mktemp)
+
+        # Cleanup function
+        cleanup() {
+            rm -f "$MERGE_COMMITS_FILE" "$ALL_COMMITS_FILE" "$PROCESSED_COMMITS_FILE"
+        }
+        trap cleanup EXIT
+
+        # Step 1: Get all merge commits
+        print_info "Step 1: Finding merge commits..."
+        echo "$COMMIT_HASHES" | while IFS= read -r commit_hash; do
+            if [[ -n "$commit_hash" ]] && is_merge_commit "$commit_hash"; then
+                echo "$commit_hash"
+            fi
+        done > "$MERGE_COMMITS_FILE"
+        
+        MERGE_COUNT=$(wc -l < "$MERGE_COMMITS_FILE")
+        print_info "Found $MERGE_COUNT merge commits"
+
+        # Step 2: For each merge commit, find what commits it brings
+        print_info "Step 2: Analyzing commits brought by each merge..."
+        declare -A COMMIT_TO_MERGE_MAP
+        declare -A MERGE_BROUGHT_MAP
+
+        while IFS= read -r merge_commit; do
+            if [[ -n "$merge_commit" ]]; then
+                # Get the merge commit message to determine direction
+                merge_message=$(git log -1 --format="%s" "$merge_commit")
+                merge_short=$(git log -1 --format="%h" "$merge_commit")
+                
+                print_debug "Analyzing merge commit $merge_short: $merge_message"
+                
+                # Check if this is a merge bringing commits TO master (not FROM master)
+                # Skip merges that are bringing master to another branch
+                if [[ "$merge_message" =~ "into ".*[^[:space:]]$ ]] && [[ ! "$merge_message" =~ "into master" ]] && [[ ! "$merge_message" =~ "into main" ]]; then
+                    # This is merging INTO a feature branch, not bringing commits to master
+                    print_debug "Skipping merge $merge_short: merging into feature branch, not master/main"
+                    continue
+                fi
+                
+                # Additional check: make sure these commits are actually from a feature branch
+                # If the merge message suggests it's bringing master to another branch, skip
+                if [[ "$merge_message" =~ "Merge branch 'master'" ]] && [[ "$merge_message" =~ "into " ]]; then
+                    print_debug "Skipping merge $merge_short: bringing master to another branch"
+                    continue
+                fi
+                
+                # Additional check: detect fast-forward merges or merges with no second parent
+                # These don't bring commits from feature branches
+                if ! git rev-parse "${merge_commit}^2" >/dev/null 2>&1; then
+                    print_debug "Skipping merge $merge_short: no second parent (fast-forward or invalid merge)"
+                    continue
+                fi
+                
+                # Get the commits brought by this merge (excluding the merge commit itself)
+                # This finds commits that are reachable from the merge commit but not from its first parent
+                brought_commits=$(git log --reverse --format="%H" "${merge_commit}^1..${merge_commit}^2" 2>/dev/null || true)
+                
+                if [[ -n "$brought_commits" ]]; then
+                    # Additional validation: check that we're currently on master/main or the merge was made to master/main
+                    # Get the branch that contains this merge commit
+                    containing_branches=$(git for-each-ref --contains="$merge_commit" --format='%(refname:short)' refs/remotes/origin/ 2>/dev/null || true)
+                    
+                    if [[ -n "$containing_branches" ]]; then
+                        # Check if any of the containing branches is master or main
+                        if ! echo "$containing_branches" | grep -wq -e 'origin/master' -e 'origin/main'; then
+                            print_debug "Skipping merge $merge_short: not in master/main branch"
+                            continue
+                        fi
+                    fi
+                    
+                    # Final check: make sure this isn't a merge bringing commits from master/main to a feature branch
+                    # by checking if the second parent (feature branch) contains commits that are newer than the first parent
+                    first_parent_date=$(git log -1 --format="%ct" "${merge_commit}^1" 2>/dev/null || echo "0")
+                    second_parent_date=$(git log -1 --format="%ct" "${merge_commit}^2" 2>/dev/null || echo "0")
+                    
+                    # If the first parent (presumably master) is newer than the second parent (feature branch),
+                    # this might be a merge bringing master to a feature branch
+                    if [[ "$first_parent_date" -gt "$second_parent_date" ]] && [[ "$merge_message" =~ "Merge branch" ]]; then
+                        # Double-check by looking at the branch names in the merge message
+                        if [[ "$merge_message" =~ "Merge branch 'master'" ]] || [[ "$merge_message" =~ "Merge branch 'main'" ]]; then
+                            print_debug "Skipping merge $merge_short: appears to be merging master/main into feature branch"
+                            continue
+                        fi
+                    fi
+                    
+                    brought_count=$(echo "$brought_commits" | wc -l)
+                    print_debug "Merge $merge_short brings $brought_count commits to master/main"
+                    
+                    # Store the mapping
+                    MERGE_BROUGHT_MAP["$merge_commit"]="$brought_commits"
+                    
+                    # Create reverse mapping (commit -> merge that brought it)
+                    while IFS= read -r brought_commit; do
+                        if [[ -n "$brought_commit" ]]; then
+                            # Only map if not already mapped (first occurrence wins)
+                            if [[ -z "${COMMIT_TO_MERGE_MAP[$brought_commit]}" ]]; then
+                                COMMIT_TO_MERGE_MAP["$brought_commit"]="$merge_commit"
+                            fi
+                        fi
+                    done <<< "$brought_commits"
+                else
+                    print_debug "Merge $merge_short brings no commits (empty merge or fast-forward)"
+                fi
+            fi
+        done < "$MERGE_COMMITS_FILE"
+
+        # Step 3: Write all commits to file
+        echo "$COMMIT_HASHES" > "$ALL_COMMITS_FILE"
+        TOTAL_COMMITS=$(wc -l < "$ALL_COMMITS_FILE")
+        print_info "Found $TOTAL_COMMITS total commits to analyze"
 
         # Variable to track if version was updated
         VERSION_UPDATED=false
 
-        while IFS= read -r commit_hash; do
+        # Process each commit
+        COMMIT_COUNT=0
+        
+        print_header "COMMIT ANALYSIS"
+        
+        while IFS= read -r commit; do
+            if [[ -n "$commit" ]]; then
             COMMIT_COUNT=$((COMMIT_COUNT + 1))
-            # Get commit message and author
-            commit_message=$(git log -1 --format="%B" $commit_hash)
-            commit_author=$(git log -1 --format="%an <%ae>" $commit_hash)
-            print_debug "==============================="
-            print_debug "Commit message: $commit_message"
-            print_debug "Commit author: $commit_author"
+                
+                # Skip if already processed
+                if grep -q "^$commit$" "$PROCESSED_COMMITS_FILE" 2>/dev/null; then
+                    continue
+                fi
+                
+                # Get commit info
+                commit_info=$(get_commit_info "$commit")
+                IFS='|' read -r subject author email date <<< "$commit_info"
+                full_author="$author <$email>"
+                
+                # Get commit hash (short)
+                commit_short=$(git log -1 --format="%h" "$commit")
             
             # Get changed files for this commit
-            changed_files=$(git diff-tree --no-commit-id --name-only -r "$commit_hash")
-            
-            # Print short commit info
-            commit_short=$(git log -1 --format="%h" $commit_hash)
-            commit_subject=$(echo "$commit_message" | head -n 1)
-            print_info "[$COMMIT_COUNT/$TOTAL_COMMITS] Analyzing commit: $commit_short - $commit_subject - by $commit_author"
+                changed_files=$(git diff-tree --no-commit-id --name-only -r "$commit")
+                
+                # Check commit type and process accordingly
+                if is_merge_commit "$commit"; then
+                    # This is a merge commit
+                    safe_echo "[$date] ${MAGENTA}MERGE:${NC} $subject - $author"
+                    safe_echo "  ${CYAN}Commit: $commit_short${NC}"
+                    
+                    # Variables to track version increment for this merge
+                    OLD_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                    merge_incremented=false
+                    
+                    # Show and analyze brought commits
+                    if [[ -n "${MERGE_BROUGHT_MAP[$commit]}" ]]; then
+                        safe_echo "  ${YELLOW}Brought commits:${NC}"
+                        
+                        # Analyze all brought commits for version increment
+                        if analyze_multiple_commits "${MERGE_BROUGHT_MAP[$commit]}"; then
+                            merge_incremented=true
+                            create_version_tag "$CURRENT_VERSION" "$commit"
+                            VERSION_UPDATED=true
+                        fi
+                        
+                        # Display brought commits
+                        while IFS= read -r brought_commit; do
+                            if [[ -n "$brought_commit" ]]; then
+                                brought_info=$(get_commit_info "$brought_commit")
+                                IFS='|' read -r brought_subject brought_author brought_email brought_date <<< "$brought_info"
+                                brought_short=$(git log -1 --format="%h" "$brought_commit")
+                                safe_echo "    [$brought_date] ${CYAN}BROUGHT:${NC} $brought_subject - $brought_author"
+                                safe_echo "      ${CYAN}Commit: $brought_short${NC}"
+                                
+                                # Mark as processed
+                                echo "$brought_commit" >> "$PROCESSED_COMMITS_FILE"
+                            fi
+                        done <<< "${MERGE_BROUGHT_MAP[$commit]}"
+                    fi
+                    
+                    # Show increment info for merge
+                    if [ "$merge_incremented" = true ]; then
+                        safe_echo "  ${GREEN}INCREMENT:${NC} $OLD_VERSION → $CURRENT_VERSION"
+                        safe_echo "  ${GREEN}TAG:${NC} $CURRENT_VERSION"
+                    else
+                        safe_echo "  ${YELLOW}INCREMENT:${NC} None"
+                        safe_echo "  ${YELLOW}TAG:${NC} None"
+                    fi
+                    
+                    # Mark merge commit as processed
+                    echo "$commit" >> "$PROCESSED_COMMITS_FILE"
+                    
+                elif [[ -n "${COMMIT_TO_MERGE_MAP[$commit]}" ]]; then
+                    # This commit was brought by a merge - skip it here as it will be shown with the merge
+                    continue
+                    
+                else
+                    # This is a simple commit
+                    safe_echo "[$date] ${GREEN}SIMPLE:${NC} $subject - $author"
+                    safe_echo "  ${CYAN}Commit: $commit_short${NC}"
             
             # Display changed files if in debug mode
             print_file_list "$changed_files"
             
-            # Variables to track if version was incremented
+                    # Variables to track version increment
             OLD_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                    commit_incremented=false
 
             # Skip if no files were changed (e.g. merge commits)
             if [ -z "$changed_files" ]; then
-                print_warning "No files changed in this commit, skipping version bump"
+                        safe_echo "  ${YELLOW}INCREMENT:${NC} None - No files changed"
+                        safe_echo "  ${YELLOW}TAG:${NC} None"
+                        echo "$commit" >> "$PROCESSED_COMMITS_FILE"
+                        safe_echo ""
                 continue
             fi
 
             # Skip version bump if commit is not in master/main branch
-            if ! git for-each-ref --contains="$commit_hash" --format='%(refname:short)' refs/remotes/origin/ | grep -wq -e 'origin/master' -e 'origin/main'; then
-                print_warning "Commit is not in master/main branch, skipping version bump"
+                    if ! git for-each-ref --contains="$commit" --format='%(refname:short)' refs/remotes/origin/ | grep -wq -e 'origin/master' -e 'origin/main'; then
+                        safe_echo "  ${YELLOW}INCREMENT:${NC} None - Not in master/main branch"
+                        safe_echo "  ${YELLOW}TAG:${NC} None"
+                        echo "$commit" >> "$PROCESSED_COMMITS_FILE"
+                        safe_echo ""
                 continue
             fi
             
@@ -640,16 +980,36 @@ runs:
             
             # Skip version bump if all changed files are ignored
             if [ "$all_files_ignored" = true ]; then
-                print_warning "All changed files are ignored, skipping version bump"
+                        safe_echo "  ${YELLOW}INCREMENT:${NC} None - All files ignored"
+                        safe_echo "  ${YELLOW}TAG:${NC} None"
+                        echo "$commit" >> "$PROCESSED_COMMITS_FILE"
+                        safe_echo ""
                 continue
             fi
             
             # Analyze commit message for version bump
-            if analyze_commit_message "$commit_message" "$commit_author"; then
-                create_version_tag "$CURRENT_VERSION" "$commit_hash"
+                    if analyze_commit_message "$(git log -1 --format="%B" $commit)" "$full_author"; then
+                        create_version_tag "$CURRENT_VERSION" "$commit"
                 VERSION_UPDATED=true
+                        commit_incremented=true
+                    fi
+                    
+                    # Show increment info
+                    if [ "$commit_incremented" = true ]; then
+                        safe_echo "  ${GREEN}INCREMENT:${NC} $OLD_VERSION → $CURRENT_VERSION"
+                        safe_echo "  ${GREEN}TAG:${NC} $CURRENT_VERSION"
+                    else
+                        safe_echo "  ${YELLOW}INCREMENT:${NC} None"
+                        safe_echo "  ${YELLOW}TAG:${NC} None"
+                    fi
+                    
+                    # Mark as processed
+                    echo "$commit" >> "$PROCESSED_COMMITS_FILE"
+                fi
+                
+                safe_echo ""
             fi
-        done <<< "$COMMIT_HASHES"
+        done < "$ALL_COMMITS_FILE"
 
         print_header "GENERATING VERSION INFO"
 
@@ -717,7 +1077,6 @@ runs:
 
         # Push all tags at the end for better efficiency
         push_all_tags
-
 
 branding:
   icon: git-merge
