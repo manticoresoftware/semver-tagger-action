@@ -277,6 +277,12 @@ git commit -m "feat(branch): branch feature. No increment as it's a branch commi
 git merge main -m "Merge main into merge1.
 EXPECTED: IGNORED (merge into branch)"
 
+# Commit something into master
+git checkout main
+echo "main another change" > main_change.py
+git add main_change.py
+git commit -m "chore: main another change."
+
 # Merge from merge1 into the master
 git checkout main
 git merge merge1 -m "Merge merge1 into main. New version 6.3.0
@@ -331,8 +337,7 @@ ISSUE3=$(gh issue create -t "Feature implementation" -b "New feature to be imple
 
 echo "Please set the type of issue #3 to 'Feature' in the GitHub UI:"
 echo "1. Go to https://github.com/manticoresoftware/semver-test/issues/3"
-echo "2. Click 'Labels' on the right sidebar"
-echo "3. Add the 'type: Feature' label"
+echo "2. Add the 'Type: Feature'"
 echo "Press Enter when done..."
 read
 
