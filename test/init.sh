@@ -250,8 +250,40 @@ PR https://github.com/manticoresoftware/semver-test/pull/7:
 
 git checkout main
 
+# ======================
+# 10. BRANCH MERGE TEST
+# ======================
+echo "DEBUG: Starting branch merge test..."
+
+# Create branch merge1
+git checkout -b merge1
+echo "branch fix" > branch_fix.py
+git add branch_fix.py
+git commit -m "fix(branch): branch fix. No increment as it's a branch commit"
+
+# Commit something into master
+git checkout main
+echo "main change" > main_change.py
+git add main_change.py
+git commit -m "chore: main change."
+
+# Commit a feature into merge1
+git checkout merge1
+echo "branch feature" > branch_feature.py
+git add branch_feature.py
+git commit -m "feat(branch): branch feature. No increment as it's a branch commit"
+
+# Merge main into the branch
+git merge main -m "Merge main into merge1.
+EXPECTED: IGNORED (merge into branch)"
+
+# Merge from merge1 into the master
+git checkout main
+git merge merge1 -m "Merge merge1 into main. New version 6.3.0
+EXPECTED: MINOR (merge commit message increment)"
+
 # ===========================================
-# 10. SETUP GITHUB REPOSITORY
+# 11. SETUP GITHUB REPOSITORY
 # ===========================================
 
 # Check if we have the required permissions
