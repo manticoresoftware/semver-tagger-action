@@ -663,6 +663,7 @@ runs:
             print_info "No existing version tags found up to current commit, starting from 0.0.0"
         else
             COMMIT_HASHES=$(git log --reverse ${LATEST_TAG}..HEAD --format="%H")
+#            COMMIT_HASHES=$(git log --reverse ^$(git rev-parse ${LATEST_TAG}) HEAD --ancestry-path --first-parent --format="%H")
         fi
 
         # Check if current commit has a release tag
