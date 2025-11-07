@@ -124,6 +124,13 @@ You can customize this list using the `ignore_patterns` input parameter.
 - **Effect:** 
   - Increment major version
   - Reset minor and patch to 0
+- **Examples:**
+  - Current version: `v1.2.3`. Commit: `feat!: remove deprecated API endpoint`
+    → New version: `v2.0.0`
+  - Current version: `v3.5.1`. Commit: `refactor(api)!: change authentication method`
+    → New version: `v4.0.0`
+  - Current version: `v2.1.0`. Commit: `fix: resolve memory leak\n\nBREAKING CHANGE: Database schema changed`
+    → New version: `v3.0.0`
 
 ### 2. Explicit Version Change
 - **Triggers:**
@@ -132,6 +139,13 @@ You can customize this list using the `ignore_patterns` input parameter.
   - If major increased → increment major, reset minor and patch
   - If minor increased → increment minor, reset patch
   - If patch increased → increment patch
+- **Examples:**
+  - Current version: `v1.2.3`. Commit: `Version from 2.2.3 to 3.0.0`
+    → New version: `v2.0.0` (major increment)
+  - Current version: `v1.2.3`. Commit: `Version from 1.2.3 to 1.5.0`
+    → New version: `v1.3.0` (minor increment)
+  - Current version: `v1.2.3`. Commit: `Version from 1.2.3 to 1.2.7`
+    → New version: `v1.2.4` (patch increment)
 
 ### 3. Commit Message
 - **Conventional Format:**
@@ -141,12 +155,36 @@ You can customize this list using the `ignore_patterns` input parameter.
   - `feature:` → increment minor, reset patch
   - Contains "fix" → increment patch
 - **Precedence:** Conventional > Legacy
+- **Examples:**
+  - Current version: `v1.2.3`. Commit: `feat: add user authentication`
+    → New version: `v1.3.0` (minor increment)
+  - Current version: `v1.2.3`. Commit: `feat(api): implement rate limiting`
+    → New version: `v1.3.0` (minor increment)
+  - Current version: `v1.2.3`. Commit: `fix: resolve login timeout issue`
+    → New version: `v1.2.4` (patch increment)
+  - Current version: `v1.2.3`. Commit: `fix(security): patch SQL injection vulnerability`
+    → New version: `v1.2.4` (patch increment)
+  - Current version: `v1.2.3`. Commit: `feature: new dashboard UI`
+    → New version: `v1.3.0` (legacy format, minor increment)
+  - Current version: `v1.2.3`. Commit: `fixed correct calculation error`
+    → New version: `v1.2.4` (legacy format, patch increment)
 
 ### 4. GitHub Reference (Lowest Priority)
 - **Triggers:**
   - PR/issue labeled "feature" or type "Feature" → increment minor, reset patch
   - PR/issue labeled "bug" or type "Bug" → increment patch
 - **Precedence:** PR > Issue
+- **Examples:**
+  - Current version: `v1.2.3`. Commit references PR #42 with label "feature"
+    → New version: `v1.3.0` (minor increment)
+  - Current version: `v1.2.3`. Commit references PR #15 with type "Feature"
+    → New version: `v1.3.0` (minor increment)
+  - Current version: `v1.2.3`. Commit references issue #88 with label "bug"
+    → New version: `v1.2.4` (patch increment)
+  - Current version: `v1.2.3`. Commit references issue #12 with type "Bug"
+    → New version: `v1.2.4` (patch increment)
+  - Current version: `v1.2.3`. Commit references both PR #10 (labeled "feature") and issue #5 (labeled "bug")
+    → New version: `v1.3.0` (PR takes precedence over issue)
 
 ## Validation
 - **Conventional Commits Pattern:**
