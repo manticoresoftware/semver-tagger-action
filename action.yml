@@ -105,6 +105,11 @@ runs:
             safe_echo "${YELLOW}WARNING:${NC} $1"
         }
 
+        # Enable debug if ACTIONS_STEP_DEBUG is true
+        if [[ "${ACTIONS_STEP_DEBUG}" == "true" ]]; then
+          DEBUG=true
+        fi
+
         # Function to print debug messages (only if DEBUG is true)
         print_debug() {
             if [ "$DEBUG" = true ]; then
