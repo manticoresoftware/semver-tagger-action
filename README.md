@@ -151,6 +151,7 @@ You can customize this list using the `ignore_patterns` input parameter.
 - **Conventional Format:**
   - `feat:` → increment minor, reset patch
   - `fix:` → increment patch
+  - Other conventional types (e.g. `docs:`, `chore:`, `ci:`, `test:`, `style:`, `refactor:`, `perf:`, `build:`) → no version bump (and legacy keyword scanning is skipped)
 - **Legacy Format:**
   - `feature:` → increment minor, reset patch
   - Contains "fix" → increment patch
@@ -195,7 +196,7 @@ You can customize this list using the `ignore_patterns` input parameter.
 
 ## Filters
 Commits are ignored when:
-- Commit message matches `^(ci|chore|docs|test)(\([^)]+\))?:`
+- Conventional commit type is not `feat` or `fix` (e.g. `docs:`, `chore:`, `ci:`, `test:`)
 - Modified files match `ignore_patterns`
 - Merge commit with no file changes
 - All changed files are ignored
