@@ -70,10 +70,16 @@ echo "Updated docs" >> README.md
 git commit -am "docs: update README.
 EXPECTED: IGNORED (.md file)"
 
+# Regression: conventional `docs:` commit that contains a legacy "fix" keyword should NOT bump.
+# This must touch a non-ignored file to ensure the decision comes from message parsing (not ignore_patterns).
+echo "wordforms docs tweak" >> main.py
+git commit -am "docs: Wordforms.md was corrupted. Fixed.
+EXPECTED: IGNORED (conventional docs; skip legacy fix keyword parsing)"
+
 echo "New API" > api_v2.py
 git add api_v2.py
 git commit -m "feat: new API. New version 3.2.0
-EXPECTED: IGNORED (starts with docs:)"
+EXPECTED: MINOR (starts with feat:)"
 
 # ======================
 # 4. LEGACY COMMITS
@@ -434,6 +440,74 @@ EOF
 git add .github/workflows/ci.yml
 git commit -m "ci: add GitHub Actions workflow."
 git push origin main
+
+# ===========================================
+# 12. VERIFY LATEST TAG
+# ===========================================
+echo "==========================================="
+echo "Verifying latest SemVer tag on GitHub..."
+echo "==========================================="
+
+EXPECTED_LATEST_TAG="${EXPECTED_LATEST_TAG:-6.3.0}"
+REPO="manticoresoftware/semver-test"
+
+echo "Expected latest tag: ${EXPECTED_LATEST_TAG}"
+
+# Wait for the latest workflow run on main to finish
+echo "Waiting for GitHub Actions workflow to complete..."
+attempt=0
+max_attempts=60
+sleep_seconds=5
+run_url=""
+
+while [ $attempt -lt $max_attempts ]; do
+  attempt=$((attempt + 1))
+  status=$(gh run list -R "$REPO" --workflow ci.yml --branch main --limit 1 --json status --jq '.[0].status' 2>/dev/null || true)
+  conclusion=$(gh run list -R "$REPO" --workflow ci.yml --branch main --limit 1 --json conclusion --jq '.[0].conclusion' 2>/dev/null || true)
+  run_url=$(gh run list -R "$REPO" --workflow ci.yml --branch main --limit 1 --json url --jq '.[0].url' 2>/dev/null || true)
+
+  if [ -z "$status" ]; then
+    echo "Attempt $attempt/$max_attempts: No workflow run found yet..."
+  else
+    echo "Attempt $attempt/$max_attempts: status=$status conclusion=${conclusion:-n/a}"
+  fi
+
+  if [ "$status" = "completed" ]; then
+    if [ "$conclusion" != "success" ]; then
+      echo "ERROR: Workflow did not succeed (conclusion=$conclusion)."
+      [ -n "$run_url" ] && echo "Run URL: $run_url"
+      exit 1
+    fi
+    break
+  fi
+
+  sleep "$sleep_seconds"
+done
+
+if [ "$status" != "completed" ]; then
+  echo "ERROR: Timed out waiting for workflow completion."
+  [ -n "$run_url" ] && echo "Run URL: $run_url"
+  exit 1
+fi
+
+# Pull tags and verify the latest semver tag matches expectation
+git fetch --tags origin --force
+
+latest_tag=$(git tag -l '[0-9]*.[0-9]*.[0-9]*' | awk -F. 'NF==3{print}' | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)
+
+if [ -z "$latest_tag" ]; then
+  echo "ERROR: No semver tags found after workflow run."
+  exit 1
+fi
+
+echo "Latest tag found: $latest_tag"
+
+if [ "$latest_tag" != "$EXPECTED_LATEST_TAG" ]; then
+  echo "ERROR: Latest tag mismatch. Expected '$EXPECTED_LATEST_TAG' but got '$latest_tag'."
+  exit 1
+fi
+
+echo "Tag verification passed."
 
 echo "==========================================="
 echo "Test repository setup complete!"
