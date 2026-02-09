@@ -419,26 +419,26 @@ runs:
                 print_increment "Found feature commit (conventional). Incrementing MINOR version to $MAJOR.$MINOR.$PATCH"
                 CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
                 return 0
-	            elif [[ "$commit_message" =~ $fix_pattern ]] && [[ ! "$commit_message" =~ $fix_breaking_pattern ]]; then
-	                print_info "Found conventional fix commit"
-	                PATCH=$((PATCH + 1))
-	                version_incremented=1
-	                print_increment "Found bug fix (conventional). Incrementing PATCH version to $MAJOR.$MINOR.$PATCH"
-	                CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-	                return 0
-	            fi
+            elif [[ "$commit_message" =~ $fix_pattern ]] && [[ ! "$commit_message" =~ $fix_breaking_pattern ]]; then
+                print_info "Found conventional fix commit"
+                PATCH=$((PATCH + 1))
+                version_incremented=1
+                print_increment "Found bug fix (conventional). Incrementing PATCH version to $MAJOR.$MINOR.$PATCH"
+                CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+                return 0
+            fi
 
-	            # If this is a conventional commit but not feat/fix (and not breaking/explicit-version handled above),
-	            # do NOT fall back to legacy keyword scanning.
-	            if is_conventional_commit "$commit_message"; then
-	                print_info "Conventional commit type does not trigger version bump, skipping legacy parsing"
-	                return 1
-	            fi
+            # If this is a conventional commit but not feat/fix (and not breaking/explicit-version handled above),
+            # do NOT fall back to legacy keyword scanning.
+            if is_conventional_commit "$commit_message"; then
+                print_info "Conventional commit type does not trigger version bump, skipping legacy parsing"
+                return 1
+            fi
 
-	            # Then check legacy format
-	            if [[ "$commit_message" =~ feature: || "$commit_message" =~ ^feature ]]; then
-	                print_info "Found legacy feature commit"
-	                MINOR=$((MINOR + 1))
+            # Then check legacy format
+            if [[ "$commit_message" =~ feature: || "$commit_message" =~ ^feature ]]; then
+                print_info "Found legacy feature commit"
+                MINOR=$((MINOR + 1))
                 PATCH=0
                 version_incremented=1
                 print_increment "Found feature commit (legacy). Incrementing MINOR version to $MAJOR.$MINOR.$PATCH"
