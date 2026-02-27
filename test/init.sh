@@ -233,6 +233,11 @@ git add ci.py
 git commit -m "ci: update CI config.
 EXPECTED: IGNORED (starts with ci:)"
 
+echo "ci explicit version" > ci-version.py
+git add ci-version.py
+git commit -m "ci: bump mcl version from 10.2.2 to 11.0.0.
+EXPECTED: IGNORED (non-bumping conventional type beats explicit version text)"
+
 # Merge with changes
 git checkout main
 git merge test-branch -m "Merge branch 'test-branch'.

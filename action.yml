@@ -306,6 +306,16 @@ runs:
             return 1
         }
 
+        # Function to check if conventional commit type should never bump version
+        is_non_bumping_conventional_commit() {
+            local message="$1"
+            local pattern="^(docs|style|refactor|perf|test|build|ci|chore)(\([a-z0-9-]+\))?:[[:space:]]"
+            if [[ "$message" =~ $pattern ]]; then
+                return 0
+            fi
+            return 1
+        }
+
         # Function to check if author should use conventional commits
         should_use_conventional_commits() {
             local author="$1"
@@ -365,7 +375,14 @@ runs:
                 return 0
             fi
 
-            # 3. Check for explicit version change
+            # 3. Guard: non-bumping conventional types must stay ignored, even if message contains
+            # explicit version text or legacy keywords.
+            if is_non_bumping_conventional_commit "$commit_message"; then
+                print_info "Conventional commit type does not trigger version bump, skipping further parsing"
+                return 1
+            fi
+
+            # 4. Check for explicit version change
             if [[ "$commit_message" =~ [Vv]ersion[[:space:]]+from[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]+to[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+) ]]; then
                 old_ver="${BASH_REMATCH[1]}"
                 new_ver="${BASH_REMATCH[2]}"
@@ -552,6 +569,9 @@ runs:
                     if [[ "$commit_message" =~ $breaking_pattern ]] || [[ "$commit_message" =~ BREAKING[[:space:]]+CHANGE: ]]; then
                         temp_increment_type="major"
                         print_info "  -> Breaking change detected (conventional commits ! or BREAKING CHANGE)"
+                    elif is_non_bumping_conventional_commit "$commit_message"; then
+                        temp_increment_type="none"
+                        print_info "  -> Non-bumping conventional commit type detected; skipping further parsing"
                     # Check for explicit version change
                     elif [[ "$commit_message" =~ [Vv]ersion[[:space:]]+from[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]+to[[:space:]]+([0-9]+\.[0-9]+\.[0-9]+) ]]; then
                         old_ver="${BASH_REMATCH[1]}"

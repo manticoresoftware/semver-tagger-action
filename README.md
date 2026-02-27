@@ -151,7 +151,7 @@ You can customize this list using the `ignore_patterns` input parameter.
 - **Conventional Format:**
   - `feat:` → increment minor, reset patch
   - `fix:` → increment patch
-  - Other conventional types (e.g. `docs:`, `chore:`, `ci:`, `test:`, `style:`, `refactor:`, `perf:`, `build:`) → no version bump (and legacy keyword scanning is skipped)
+  - Other conventional types (e.g. `docs:`, `chore:`, `ci:`, `test:`, `style:`, `refactor:`, `perf:`, `build:`) → no version bump (explicit-version and legacy keyword scanning are skipped)
 - **Legacy Format:**
   - `feature:` → increment minor, reset patch
   - Contains "fix" → increment patch
