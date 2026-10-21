@@ -309,7 +309,7 @@ runs:
         # Function to check if conventional commit type should never bump version
         is_non_bumping_conventional_commit() {
             local message="$1"
-            local pattern="^(docs|style|refactor|perf|test|build|ci|chore)(\([a-z0-9-]+\))?:[[:space:]]"
+            local pattern="^(docs|style|refactor|test|build|ci|chore)(\([a-z0-9-]+\))?:[[:space:]]"
             if [[ "$message" =~ $pattern ]]; then
                 return 0
             fi
@@ -425,8 +425,8 @@ runs:
             # First check conventional format (excluding breaking changes which are handled above)
             local feat_pattern="^feat(\([[:alnum:]-]+\))?:[[:space:]]"
             local feat_breaking_pattern="^feat(\([[:alnum:]-]+\))?!:[[:space:]]"
-            local fix_pattern="^fix(\([[:alnum:]-]+\))?:[[:space:]]"
-            local fix_breaking_pattern="^fix(\([[:alnum:]-]+\))?!:[[:space:]]"
+            local patch_pattern="^(fix|perf)(\([[:alnum:]-]+\))?:[[:space:]]"
+            local patch_breaking_pattern="^(fix|perf)(\([[:alnum:]-]+\))?!:[[:space:]]"
             
             if [[ "$commit_message" =~ $feat_pattern ]] && [[ ! "$commit_message" =~ $feat_breaking_pattern ]]; then
                 print_info "Found conventional feature commit"
@@ -436,16 +436,16 @@ runs:
                 print_increment "Found feature commit (conventional). Incrementing MINOR version to $MAJOR.$MINOR.$PATCH"
                 CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
                 return 0
-            elif [[ "$commit_message" =~ $fix_pattern ]] && [[ ! "$commit_message" =~ $fix_breaking_pattern ]]; then
-                print_info "Found conventional fix commit"
+            elif [[ "$commit_message" =~ $patch_pattern ]] && [[ ! "$commit_message" =~ $patch_breaking_pattern ]]; then
+                print_info "Found conventional patch commit"
                 PATCH=$((PATCH + 1))
                 version_incremented=1
-                print_increment "Found bug fix (conventional). Incrementing PATCH version to $MAJOR.$MINOR.$PATCH"
+                print_increment "Found fix/perf commit (conventional). Incrementing PATCH version to $MAJOR.$MINOR.$PATCH"
                 CURRENT_VERSION="${MAJOR}.${MINOR}.${PATCH}"
                 return 0
             fi
 
-            # If this is a conventional commit but not feat/fix (and not breaking/explicit-version handled above),
+            # If this is a conventional commit but not feat/fix/perf (and not breaking/explicit-version handled above),
             # do NOT fall back to legacy keyword scanning.
             if is_conventional_commit "$commit_message"; then
                 print_info "Conventional commit type does not trigger version bump, skipping legacy parsing"
@@ -593,15 +593,15 @@ runs:
                     else
                         local feat_pattern="^feat(\([[:alnum:]-]+\))?:[[:space:]]"
                         local feat_breaking_pattern="^feat(\([[:alnum:]-]+\))?!:[[:space:]]"
-                        local fix_pattern="^fix(\([[:alnum:]-]+\))?:[[:space:]]"
-                        local fix_breaking_pattern="^fix(\([[:alnum:]-]+\))?!:[[:space:]]"
+                        local patch_pattern="^(fix|perf)(\([[:alnum:]-]+\))?:[[:space:]]"
+                        local patch_breaking_pattern="^(fix|perf)(\([[:alnum:]-]+\))?!:[[:space:]]"
                         
                         if [[ "$commit_message" =~ $feat_pattern ]] && [[ ! "$commit_message" =~ $feat_breaking_pattern ]]; then
                             temp_increment_type="minor"
                             print_info "  -> Conventional feature commit detected"
-                        elif [[ "$commit_message" =~ $fix_pattern ]] && [[ ! "$commit_message" =~ $fix_breaking_pattern ]]; then
+                        elif [[ "$commit_message" =~ $patch_pattern ]] && [[ ! "$commit_message" =~ $patch_breaking_pattern ]]; then
                             temp_increment_type="patch"
-                            print_info "  -> Conventional fix commit detected"
+                            print_info "  -> Conventional patch commit detected"
                         # Check legacy format
                         elif [[ "$commit_message" =~ feature: || "$commit_message" =~ ^feature ]]; then
                             temp_increment_type="minor"
