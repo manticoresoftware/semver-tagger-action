@@ -10,7 +10,7 @@ This GitHub action automatically creates and pushes version tags based on your c
 4. Automatically calculates the next version number based on:
    - **MAJOR** version (X.0.0) - when commits contain "breaking" changes
    - **MINOR** version (0.X.0) - for new features and non-breaking changes
-   - **PATCH** version (0.0.X) - for bug fixes (commits with "fix", "bugfix", etc.)
+   - **PATCH** version (0.0.X) - for bug fixes and performance improvements (`fix:` and `perf:` commits)
 5. Creates and pushes a new Git tag with the calculated version
 6. Outputs both simple version (X.Y.Z) and full version with metadata
 
@@ -20,6 +20,8 @@ For example:
 - If current version is `v1.2.3` and you commit with "feat: new login"
   → Action creates tag `v1.3.0`
 - If current version is `v1.2.3` and you commit with "fix: login bug"
+  → Action creates tag `v1.2.4`
+- If current version is `v1.2.3` and you commit with "perf: improve search speed"
   → Action creates tag `v1.2.4`
 
 ## Usage
@@ -150,8 +152,8 @@ You can customize this list using the `ignore_patterns` input parameter.
 ### 3. Commit Message
 - **Conventional Format:**
   - `feat:` → increment minor, reset patch
-  - `fix:` → increment patch
-  - Other conventional types (e.g. `docs:`, `chore:`, `ci:`, `test:`, `style:`, `refactor:`, `perf:`, `build:`) → no version bump (explicit-version and legacy keyword scanning are skipped)
+  - `fix:`, `perf:` → increment patch
+  - Other conventional types (e.g. `docs:`, `chore:`, `ci:`, `test:`, `style:`, `refactor:`, `build:`) → no version bump (explicit-version and legacy keyword scanning are skipped)
 - **Legacy Format:**
   - `feature:` → increment minor, reset patch
   - Contains "fix" → increment patch
@@ -164,6 +166,8 @@ You can customize this list using the `ignore_patterns` input parameter.
   - Current version: `v1.2.3`. Commit: `fix: resolve login timeout issue`
     → New version: `v1.2.4` (patch increment)
   - Current version: `v1.2.3`. Commit: `fix(security): patch SQL injection vulnerability`
+    → New version: `v1.2.4` (patch increment)
+  - Current version: `v1.2.3`. Commit: `perf(search): optimize filtering`
     → New version: `v1.2.4` (patch increment)
   - Current version: `v1.2.3`. Commit: `feature: new dashboard UI`
     → New version: `v1.3.0` (legacy format, minor increment)
@@ -196,7 +200,7 @@ You can customize this list using the `ignore_patterns` input parameter.
 
 ## Filters
 Commits are ignored when:
-- Conventional commit type is not `feat` or `fix` (e.g. `docs:`, `chore:`, `ci:`, `test:`)
+- Conventional commit type is not `feat`, `fix`, or `perf` (e.g. `docs:`, `chore:`, `ci:`, `test:`)
 - Modified files match `ignore_patterns`
 - Merge commit with no file changes
 - All changed files are ignored
@@ -219,3 +223,4 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fi
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
