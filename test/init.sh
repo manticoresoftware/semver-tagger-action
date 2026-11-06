@@ -81,6 +81,20 @@ git add api_v2.py
 git commit -m "feat: new API. New version 3.2.0
 EXPECTED: MINOR (starts with feat:)"
 
+# Conventional types with no SemVer effect (CC 1.0.0) must stay ignored even
+# when the message contains legacy bump keywords.
+echo "checkout" >> main.py
+git commit -am "build(deps): fix CI pipeline.
+EXPECTED: IGNORED (build never bumps; legacy fix keyword skipped)"
+
+echo "rollback" >> main.py
+git commit -am 'revert: "fix(parser): handle null values".
+EXPECTED: IGNORED (revert never bumps; legacy fix keyword skipped)'
+
+# Breaking token in the subject is not a footer (CC 1.0.0 rule 4).
+echo "breaking note" >> main.py
+git commit -am "docs: clarify BREAKING CHANGE: migration notes.
+EXPECTED: IGNORED (breaking token must be in the footer, not the subject)"
 # ======================
 # 4. LEGACY COMMITS
 # ======================
@@ -299,6 +313,30 @@ git checkout main
 git merge merge1 -m "Merge merge1 into main. New version 6.3.0
 EXPECTED: MINOR (merge commit message increment)"
 
+# ======================
+# 10.5 CC 1.0.0 ALIGNMENT
+# ======================
+git config user.name "Conventional User"
+git config user.email "conventional@example.com"
+
+# Scope may contain alphanumerics, "_", "." and "-"; strict authors used to
+# be rejected outright on scopes like these.
+echo "sso" > sso.py
+git add sso.py
+git commit -m "feat(auth.module): add SSO login. New version 6.4.0
+EXPECTED: MINOR (scoped feat with dot in scope)"
+
+echo "crash guard" >> main.py
+git commit -am "fix(Core_Lib): guard against crash. New version 6.4.1
+EXPECTED: PATCH (scoped fix with uppercase and underscore in scope)"
+
+# BREAKING-CHANGE is synonymous with BREAKING CHANGE (CC 1.0.0 rule 6).
+echo "runtime" > runtime.py
+git add runtime.py
+git commit -m "chore: drop Node 12 runtime. New version 7.0.0
+
+BREAKING-CHANGE: runtime requirements changed
+EXPECTED: MAJOR (BREAKING-CHANGE synonym in footer)"
 # ===========================================
 # 11. SETUP GITHUB REPOSITORY
 # ===========================================
@@ -453,7 +491,7 @@ echo "==========================================="
 echo "Verifying latest SemVer tag on GitHub..."
 echo "==========================================="
 
-EXPECTED_LATEST_TAG="${EXPECTED_LATEST_TAG:-6.3.0}"
+EXPECTED_LATEST_TAG="${EXPECTED_LATEST_TAG:-7.0.0}"
 REPO="manticoresoftware/semver-test"
 
 echo "Expected latest tag: ${EXPECTED_LATEST_TAG}"
