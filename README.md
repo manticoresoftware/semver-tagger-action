@@ -119,8 +119,8 @@ You can customize this list using the `ignore_patterns` input parameter.
 
 ### 1. Breaking Change (Highest Priority)
 - **Triggers:**
-  - Commit message matches `^(\w+)(\([^)]+\))?!:`
-  - Commit message contains footer "BREAKING CHANGE:"
+  - Commit subject matches `^(\w+)(\([\w.-]+\))?!:`
+  - Commit footer (last paragraph, separated by a blank line) starts a line with "BREAKING CHANGE:" or its synonym "BREAKING-CHANGE:"
 - **Effect:** 
   - Increment major version
   - Reset minor and patch to 0
@@ -151,7 +151,7 @@ You can customize this list using the `ignore_patterns` input parameter.
 - **Conventional Format:**
   - `feat:` → increment minor, reset patch
   - `fix:` → increment patch
-  - Other conventional types (e.g. `docs:`, `chore:`, `ci:`, `test:`, `style:`, `refactor:`, `perf:`, `build:`) → no version bump (explicit-version and legacy keyword scanning are skipped)
+  - Other conventional types (e.g. `docs:`, `chore:`, `ci:`, `test:`, `style:`, `refactor:`, `perf:`, `build:`, `revert:`) → no version bump (explicit-version and legacy keyword scanning are skipped)
 - **Legacy Format:**
   - `feature:` → increment minor, reset patch
   - Contains "fix" → increment patch
@@ -190,13 +190,14 @@ You can customize this list using the `ignore_patterns` input parameter.
 ## Validation
 - **Conventional Commits Pattern:**
   ```
-  ^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([a-z0-9-]+\))?!?:[[:space:]]
+  ^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([[:alnum:]_.-]+\))?!?:[[:space:]]
   ```
+  The scope may contain alphanumerics, `_`, `.` and `-` (e.g. `feat(auth.module):`).
 - Required for authors listed in `conventional_commits_authors`
 
 ## Filters
 Commits are ignored when:
-- Conventional commit type is not `feat` or `fix` (e.g. `docs:`, `chore:`, `ci:`, `test:`)
+- Conventional commit type is not `feat` or `fix` (e.g. `docs:`, `chore:`, `ci:`, `test:`, `revert:`)
 - Modified files match `ignore_patterns`
 - Merge commit with no file changes
 - All changed files are ignored
